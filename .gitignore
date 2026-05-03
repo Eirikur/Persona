@@ -1,0 +1,12 @@
+Archaic/
+wav/
+
+__pycache__/
+*.pyc
+*.pyo
+
+*~
+\#*#
+.#*
+
+.claude/

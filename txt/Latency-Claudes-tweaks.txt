@@ -1,0 +1,149 @@
+Apr 10
+
+Your RTX 3060 (12GB VRAM, I assume) is actually a reasonable card for inference — the bottleneck is usually just model size. Here's how I'd think about optimizing your pipeline:
+
+STT: Whisper is already a great choice
+
+Whisper is quite efficient. If you're not already, make sure you're running:
+
+    faster-whisper (uses CTranslate2 — significantly faster than the original OpenAI implementation)
+    whisper.cpp with CUDA is another solid option
+    Use large-v3-turbo or distil-whisper/large-v3 — distil-whisper is roughly 6x faster than large-v3 with minimal quality loss
+    Keep it on int8 quantization on GPU
+
+On a 3060 you should be hitting real-time factor well under 0.1 with distil-whisper, so STT probably isn't your main latency culprit.
+
+TTS: Chatterbox is the likely bottleneck
+
+Chatterbox is a relatively new and somewhat heavy model. A few options:
+
+    Kokoro-82M — extremely fast, ~82M params, runs in real-time on a 3060 with room to spare. Quality is surprisingly good for its size. This is probably your best swap if you want low latency above all.
+    Piper TTS — CPU-friendly but also very fast on GPU. Lower ceiling on voice quality but essentially zero latency.
+    StyleTTS2 — higher quality than Kokoro, still manageable on a 3060, but noticeably slower than Kokoro.
+    If you're attached to Chatterbox specifically, make sure you're running it with torch.compile() and float16 — that can cut inference time significantly.
+
+LLM: Depends on what you're running
+
+This is usually where the most time goes. On 12GB VRAM:
+
+    Llama 3.1 8B / Qwen2.5 7B at Q4_K_M in llama.cpp or via Ollama fit comfortably and are fast
+    vLLM is great but is more optimized for throughput (batched requests) than single-turn latency — for a voice assistant, llama.cpp with -ngl 99 (all layers on GPU) often wins on single-query latency
+    Keep your context window tight — latency scales with context length
+    For voice specifically, you want time-to-first-token low, so a smaller/faster model usually beats a larger/smarter one
+
+Pipeline architecture tip
+
+The biggest win beyond model choice is often streaming end-to-end:
+
+    Stream Whisper transcription (faster-whisper supports this)
+    Stream LLM tokens as they arrive
+    Feed TTS sentence-by-sentence as the LLM completes each one, rather than waiting for the full response
+
+This can cut perceived latency dramatically even if raw throughput stays the same. Libraries like RealtimeTTS are designed exactly for this pattern and work well with Kokoro and faster-whisper.
+
+Honest assessment: On a 3060, you're not going to match cloud latency for a heavy TTS model like Chatterbox with voice cloning. But with distil-whisper + a quantized 7-8B LLM + Kokoro, sub-second end-to-end latency on short responses is achievable.
+
+I'll try the distilled Whisper. I didn't quite know to search for it. Yes, I have the 12GB RTX3060.  I see those models on HuggingFace. Can you tell me the best "model loader" or frameworkt to run those? Also, how do I follow your instruction "keep it on int8 quantization on GPU?" It makes sense, but I've tried dozens of things and I'm burned-out.
+Apr 10
+
+Totally understandable — the HuggingFace ecosystem can be exhausting. Let me give you the most direct path.
+
+Use faster-whisper directly. That's it.
+
+Don't use the original openai-whisper package, don't use a pipeline wrapper. Just:
+bash
+
+pip install faster-whisper
+
+python
+
+from faster_whisper import WhisperModel
+
+model = WhisperModel("distil-large-v3", device="cuda", compute_type="int8_float16")
+
+segments, info = model.transcribe("audio.wav")
+for segment in segments:
+    print(segment.text)
+
+That one line — compute_type="int8_float16" — is the int8 quantization. faster-whisper handles it internally via CTranslate2. You don't need to do anything else. It weights are quantized to int8 for storage/compute but accumulated in float16, which is the sweet spot for GPU.
+
+The model string "distil-large-v3" will auto-download from HuggingFace the first time. No manual model management needed.
+
+For streaming (lower latency), faster-whisper supports VAD (voice activity detection) built-in:
+python
+
+model = WhisperModel("distil-large-v3", device="cuda", compute_type="int8_float16")
+
+segments, info = model.transcribe(
+    "audio.wav",
+    vad_filter=True,       # trims silence automatically
+    beam_size=1,           # faster, slightly less accurate — good for voice assistant use
+)
+
+beam_size=1 is a meaningful latency win for conversational use where you don't need perfect accuracy.
+
+That's genuinely the whole setup. The reason faster-whisper exists is specifically to solve the "Whisper is slow" problem, and it does it well without requiring you to touch quantization tooling, GGUF files, or anything else. You just install it and it works fast.
+
+\I had no idea that the faster-whisper on PyPi would do this. Cool. I liked WhisperLiveKit, but I will definitely try this recipe.  Do you have something similar for Chatterbox?
+Apr 10
+
+Unfortunately Chatterbox is a bit of a different story — it's a newer model (released by Resemble AI in early 2025) and the ecosystem around it hasn't had time to develop the same kind of optimized inference wrappers that Whisper has.
+
+The official repo is basically the only path right now:
+bash
+
+pip install chatterbox-tts
+
+python
+
+import torchaudio
+from chatterbox.tts import ChatterboxTTS
+
+model = ChatterboxTTS.from_pretrained(device="cuda")
+
+text = "Hello, this is a test."
+wav = model.generate(text)
+torchaudio.save("output.wav", wav, model.sr)
+
+For speed, the main levers you have are:
+
+torch.compile() on first use (one-time warmup cost, faster after):
+python
+
+import torch
+model = ChatterboxTTS.from_pretrained(device="cuda")
+model.vocoder = torch.compile(model.vocoder)
+
+And make sure you're in float16:
+python
+
+model = ChatterboxTTS.from_pretrained(device="cuda")
+model.to(torch.float16)
+
+Honest caveat: I'm less certain about Chatterbox's internals than I am about faster-whisper, because it's newer and I have less reliable information about its architecture. I'd recommend checking the official repo and its issues tab — if there are community-discovered speed tricks, that's where they'll surface first.
+
+If latency remains a problem with Chatterbox specifically, Kokoro-82M is worth a genuine try. It has a similarly clean install story:
+bash
+
+pip install kokoro
+pip install soundfile
+
+python
+
+from kokoro import KPipeline
+import soundfile as sf
+
+pipeline = KPipeline(lang_code='a')  # 'a' = American English
+generator = pipeline("Hello, this is a test.", voice='af_heart')
+
+for i, (gs, ps, audio) in enumerate(generator):
+    sf.write(f"output_{i}.wav", audio, 24000)
+
+Kokoro streams sentence by sentence natively, which pairs very well with a streaming LLM — you can start playing audio before the full response is generated. On your 3060 it should feel nearly instant.
+
+I'm just *awfully* familiiar with that. I get much better speed with Turbo on CPU. I'll go speed up Whisper and then I can see what issues remain.
+12:01 AM
+
+That makes total sense — Whisper Turbo (large-v3-turbo) is surprisingly competitive on CPU precisely because it's distilled down to a fraction of the decoder layers. If that's already working well for you, distil-large-v3 on GPU with faster-whisper should be a nice jump from there.
+
+Good luck — come back once you've benchmarked it and we can figure out where the remaining bottleneck is. It'll be much easier to target once Whisper is off the table as a suspect.

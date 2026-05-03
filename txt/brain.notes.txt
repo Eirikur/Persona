@@ -1,0 +1,3 @@
+To go with kokoro we need:
+a voice.pt file
+from kokoro_speak import speak

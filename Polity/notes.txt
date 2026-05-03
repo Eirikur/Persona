@@ -1,0 +1,24 @@
+ print(json.dumps(q, indent=4))
+{
+    "version": 0.1,
+    "polity": "Polity",
+    "type": "CMD",
+    "to": "",
+    "from": "a9ff64e0-0d6e-4d70-b252-130de73b9570",
+    "my_number": 2,
+    "timestamp": "1775333833.41",
+    "reply_to": 0,
+    "body_len": 4,
+    "body": "list",
+    "body_checksum": 0,
+    "continued": false,
+    "packets": 0,
+    "from_ip": "192.168.1.150"
+}
+
+Does my_number need to be senders_number? What is this actually for?
+It's so that a conversation or request/response can be tracked.
+Could call it sequence_number
+Need a name for the "responding to" field
+
+New function codes: SPI, SPO, for speech i/o.

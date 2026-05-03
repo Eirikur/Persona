@@ -1,0 +1,1 @@
+0.578 * af_bella + 0.422 * af_nicole

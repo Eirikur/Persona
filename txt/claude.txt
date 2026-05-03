@@ -1,0 +1,33 @@
+More work on my Persona project.
+I need to evaluate Qwen3-tts as a Chatterbox replacement.
+The github project faster-qwen3-tts looks like it could
+be the right thing. I have the repository cloned into
+faster-qwen3-tts for you. I ran the project's benchmark.sh
+successfully.
+
+In folder qwen3-tts-testing, I have
+clone.py which I copied from one of the examples.
+Using it, I generated bird-dream.pt from bird-dream.wav.
+generate-with-embedding.py can speak text from bird-dream.pt
+This is not what I really want because it's a simplified case.
+The result is good sound but no accent or expression--proof of
+concept. I'm starting to think we can get this to work.
+In a sub-directory, I have copied the Qwen model files from
+.cache/huggingface so that you can see them. From the naming,
+there may be only one choice for voice cloning. Perhaps they
+will all do inference with a custom voice, just not make a
+new custom voice.
+
+
+Goal: A speak-qwen.py replacing speak.py.
+
+
+First deliverable: Replaces speak.py, taking the voice-audio-prompt that is
+passed to the importable speak function or via the CLI
+and using it. It might have to perform the cloning action and use the
+newly created clone. This is just a first draft to hear it in action.
+
+Second version: Allows switching between the different (size) models.
+I don't think there is any sense to trying to switch at the speak() call time.
+We could pass the model name and any related parameters to get_model().
+In future I see this as a class that gets passed the model name and parameters.
