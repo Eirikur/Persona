@@ -69,7 +69,7 @@ if __name__ == '__main__':
         spinner=False,
         level=logging.WARNING,
         no_log_file=True,
-        post_speech_silence_duration=0.05,
+        post_speech_silence_duration=0.3, #.05
         enable_realtime_transcription=True,
     )
 
