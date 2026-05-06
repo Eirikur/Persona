@@ -1,1 +1,0 @@
-0.657 * af + 0.000 * af_nicole + 0.343 * bf_emma

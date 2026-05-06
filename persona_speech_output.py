@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uo v run --script
+#!/usr/bin/env -S uv run --script
 # 21 Feb '26: Working in a loop with llama3 via chuk_llm
 # /// script
 # requires-python = ">=3.11,<3.12"
@@ -60,8 +60,8 @@ def speak(voice_prompt, line):
     # exaggeration=0.5,
     # cfg_weight=0.3,
     # temperature=0.5,
-    # start_time = time.time()
-    # start_cpu_time = time.process_time()
+    start_time = time.time()
+    start_cpu_time = time.process_time()
 
     sink = io.StringIO()
     with redirect_stderr(sink):
@@ -75,15 +75,15 @@ def speak(voice_prompt, line):
             )
 
     # print("Generated.")
-    # end_time = time.time()
-    # end_cpu_time = time.process_time()
-    # execution_time = end_time - start_time
-    # execution_cpu = end_cpu_time - start_cpu_time
-    # waiting_time = execution_cpu - execution_time
+    end_time = time.time()
+    end_cpu_time = time.process_time()
+    execution_time = end_time - start_time
+    execution_cpu = end_cpu_time - start_cpu_time
+    waiting_time = execution_cpu - execution_time
     # print(f"Wall time: {execution_time:.2f} CPU time: {execution_cpu:.2f}, Waiting: {waiting_time:.2f}")
-    # word_count = len(line.split(' '))
-    # seconds_per_word = execution_time / word_count
-    # print(f"{word_count} words, rendered in {execution_time:.2f}, seconds/word {seconds_per_word:.2f}")
+    word_count = len(line.split(' '))
+    seconds_per_word = execution_time / word_count
+    print(f"{word_count} words, rendered in {execution_time:.2f}, seconds/word {seconds_per_word:.2f}")
     # ta.save('speak.wav', wav, MODEL.sr)
     # print('File written.')
     audio_array = wav.squeeze().cpu().numpy()
@@ -138,8 +138,6 @@ def punc_norm(text: str) -> str:
 
     return text
 
-
-
 #
 if __name__ == '__main__':
     import sys
@@ -151,7 +149,7 @@ if __name__ == '__main__':
 
     if text_file:
         with open(text_file, 'r') as f:
-            speak(voice_prompt, f.read(), turbo=use_turbo)
+            speak(voice_prompt, f.read())
     else:
         while True:
             line = ""

@@ -1,1 +1,0 @@
-0.488 * af_sarah + 0.512 * af_nicole
