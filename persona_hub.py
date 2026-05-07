@@ -2,25 +2,46 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "openai",
+#     "fastapi",
+#     "uvicorn",
+#     "httpx",
 # ]
 # ///
 
-from openai import OpenAI
+import uvicorn
+import httpx
+from dataclasses import dataclass
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-LLM_URL = "http://127.0.0.1:8401/v1"  # 8401=cloud, 8402=local
-LLM_MODEL = "gpt-4o-mini"
+PORT = 8400
+LLM_URL = "http://127.0.0.1:8401"
 
-client = OpenAI(base_url=LLM_URL, api_key="persona")
+@dataclass
+class Config:
+    provider: str = "ollama"
+    model: str | None = None
 
-def ask(messages: list[dict]) -> str:
-    response = client.chat.completions.create(model=LLM_MODEL, messages=messages)
-    return response.choices[0].message.content
+cfg = Config()
+app = FastAPI()
 
-services = ['speech_input', 'speech_output', 'llm']
+class ThinkRequest(BaseModel):
+    text: str
 
-def start_up():
-    pass
+@app.post("/think")
+def think(req: ThinkRequest):
+    r = httpx.post(f"{LLM_URL}/v1/chat/completions", timeout=60.0, json={
+        "provider": cfg.provider,
+        "model": cfg.model,
+        "messages": [{"role": "user", "content": req.text}],
+    })
+    r.raise_for_status()
+    return {"text": r.json()["choices"][0]["message"]["content"]}
+
+services = ['speech_input', 'llm', 'speech_output']
 
 def check_services():
     pass
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=PORT)
