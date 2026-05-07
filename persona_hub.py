@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 PORT = 8400
 LLM_URL = "http://127.0.0.1:8401"
+SPEECH_OUTPUT_URL = "http://127.0.0.1:8402"
 STATE_FILE = Path.home() / ".config" / "persona" / "state.json"
 
 @dataclass
@@ -69,17 +70,39 @@ app = FastAPI()
 class ThinkRequest(BaseModel):
     text: str
 
-@app.post("/think")
-def think(req: ThinkRequest):
-    persona = state.personas[state.active_persona]
+def _llm(persona, text: str) -> str:
     r = httpx.post(f"{LLM_URL}/v1/chat/completions", timeout=60.0, json={
         "provider": persona.provider,
         "model": persona.model,
         "system_prompt": persona.system_prompt,
-        "messages": [{"role": "user", "content": req.text}],
+        "messages": [{"role": "user", "content": text}],
     })
     r.raise_for_status()
-    return {"text": r.json()["choices"][0]["message"]["content"]}
+    return r.json()["choices"][0]["message"]["content"]
+
+def _speak(response_text: str, voice_prompt: str) -> None:
+    httpx.post(f"{SPEECH_OUTPUT_URL}/speak", timeout=120.0, json={
+        "text": response_text,
+        "voice_prompt": voice_prompt,
+    }).raise_for_status()
+
+def _dispatch(text: str) -> str | None:
+    """Return a response string for local commands, or None to fall through to LLM."""
+    return None
+
+@app.post("/think")
+def think(req: ThinkRequest):
+    persona = state.personas[state.active_persona]
+    return {"text": _llm(persona, req.text)}
+
+@app.post("/converse")
+def converse(req: ThinkRequest):
+    persona = state.personas[state.active_persona]
+    voice = state.voices.get(persona.voice, state.voices["default"])
+    response = _dispatch(req.text) or _llm(persona, req.text)
+    print(f"> {response}")
+    _speak(response, voice.sample_file or "wav/bird-dream.wav")
+    return {"text": response}
 
 services = ['speech_input', 'llm', 'speech_output']
 
