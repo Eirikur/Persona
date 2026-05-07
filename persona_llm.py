@@ -15,7 +15,6 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 PORT = 8401
-SYSTEM_PROMPT = "You are Persona, a helpful voice assistant."
 
 _PROVIDERS = {
     "ollama":     ("http://localhost:11434/v1",  None,               "qwen3:8b"),
@@ -32,6 +31,7 @@ app = FastAPI()
 class ChatRequest(BaseModel):
     provider: str = "ollama"
     model: str | None = None
+    system_prompt: str = "You are Persona, a helpful voice assistant."
     messages: list[dict]
 
 @app.post("/v1/chat/completions")
@@ -44,7 +44,7 @@ async def chat(req: ChatRequest):
     if not model:
         raise HTTPException(status_code=400, detail=f"No default model for {req.provider!r}")
     client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + req.messages
+    messages = [{"role": "system", "content": req.system_prompt}] + req.messages
     response = await client.chat.completions.create(model=model, messages=messages)
     return response.model_dump()
 
