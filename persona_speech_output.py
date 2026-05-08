@@ -69,6 +69,11 @@ def punc_norm(text: str) -> str:
     return text
 
 
+@app.post("/stop")
+def stop():
+    sd.stop()
+    return {"ok": True}
+
 @app.post("/speak")
 def speak(req: SpeakRequest):
     text = punc_norm(req.text)

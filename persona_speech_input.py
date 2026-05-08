@@ -37,12 +37,6 @@ HUB_URL = "http://127.0.0.1:8400"
 
 
 def _detect_device():
-    try:
-        import ctranslate2
-        if 'float16' in ctranslate2.get_supported_compute_types('cuda'):
-            return 'cuda', 'float16'
-    except (RuntimeError, ImportError):
-        pass
     return 'cpu', 'int8'
 
 
@@ -80,7 +74,7 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
 async def lifespan(app: FastAPI):
     t = threading.Thread(
         target=_recorder_loop,
-        args=(HUB_URL, "base.en", 0.6),
+        args=(HUB_URL, "tiny.en", 0.6),
         daemon=True,
     )
     t.start()

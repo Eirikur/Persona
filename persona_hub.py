@@ -9,6 +9,7 @@
 # ///
 
 import json
+import time
 import uvicorn
 import httpx
 from dataclasses import dataclass, field, asdict
@@ -36,7 +37,7 @@ class InputProfile:
 @dataclass
 class Persona:
     name: str
-    system_prompt: str = "You are Persona, a helpful voice assistant."
+    system_prompt: str = "You are Salice, a helpful voice assistant. Keep responses short and conversational — you are speaking aloud, not writing. Two or three sentences at most unless asked for more."
     voice: str = "default"
     input: str = "default"
     provider: str = "ollama"
@@ -65,6 +66,10 @@ def _save(s: GlobalState) -> None:
     STATE_FILE.write_text(json.dumps(asdict(s), indent=2))
 
 state = _load()
+_speaking = False
+_last_spoke = 0.0
+SPEAK_COOLDOWN = 8.0
+_mode = "open"  # "open" or "named"
 app = FastAPI()
 
 class ThinkRequest(BaseModel):
@@ -81,13 +86,38 @@ def _llm(persona, text: str) -> str:
     return r.json()["choices"][0]["message"]["content"]
 
 def _speak(response_text: str, voice_prompt: str) -> None:
-    httpx.post(f"{SPEECH_OUTPUT_URL}/speak", timeout=120.0, json={
-        "text": response_text,
-        "voice_prompt": voice_prompt,
-    }).raise_for_status()
+    try:
+        httpx.post(f"{SPEECH_OUTPUT_URL}/speak", timeout=120.0, json={
+            "text": response_text,
+            "voice_prompt": voice_prompt,
+        }).raise_for_status()
+    except httpx.ConnectError:
+        print("speech output not available")
+
+_NAMES = ("salice", "sal")
 
 def _dispatch(text: str) -> str | None:
     """Return a response string for local commands, or None to fall through to LLM."""
+    global _mode
+    normalized = text.strip().lower().rstrip(".,!")
+    print(f"[{_mode}] dispatch: {normalized!r}")
+
+    if normalized.startswith("stop"):
+        httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
+        return ""
+
+    if "go quiet" in normalized or "quiet mode" in normalized:
+        _mode = "named"
+        print("mode → named")
+        return ""
+
+    if _mode == "named":
+        for name in _NAMES:
+            if normalized.startswith(name):
+                text = text.strip()[len(name):].lstrip(" ,")
+                return None if text else ""
+        return ""  # ignore — not addressed to Sal
+
     return None
 
 @app.post("/think")
@@ -95,13 +125,40 @@ def think(req: ThinkRequest):
     persona = state.personas[state.active_persona]
     return {"text": _llm(persona, req.text)}
 
+@app.post("/mode/{mode}")
+def set_mode(mode: str):
+    global _mode
+    if mode not in {"open", "named"}:
+        return {"error": f"unknown mode {mode!r}"}
+    _mode = mode
+    print(f"mode → {mode}")
+    return {"mode": _mode}
+
+@app.post("/stop")
+def stop():
+    httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0).raise_for_status()
+    return {"ok": True}
+
 @app.post("/converse")
 def converse(req: ThinkRequest):
+    global _speaking, _last_spoke
     persona = state.personas[state.active_persona]
     voice = state.voices.get(persona.voice, state.voices["default"])
-    response = _dispatch(req.text) or _llm(persona, req.text)
-    print(f"> {response}")
-    _speak(response, voice.sample_file or "wav/bird-dream.wav")
+    dispatched = _dispatch(req.text)
+    if dispatched is not None:
+        return {"text": dispatched}
+    if _speaking or (time.time() - _last_spoke < SPEAK_COOLDOWN):
+        print(f"ignored (cooldown): {req.text!r}")
+        return {"text": ""}
+    response = _llm(persona, req.text)
+    if response:
+        print(f"> {response}")
+        _speaking = True
+        try:
+            _speak(response, voice.sample_file or "wav/bird-dream.wav")
+        finally:
+            _speaking = False
+            _last_spoke = time.time()
     return {"text": response}
 
 services = ['speech_input', 'llm', 'speech_output']
