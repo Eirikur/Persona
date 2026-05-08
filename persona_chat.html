@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=EB+Garamond:ital,wght@0,400;1,400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #080808;
+    --surface:      #111114;
+    --border:       #222228;
+    --text-user:    #c8c8c8;
+    --text-sal:     #e8d9c0;
+    --text-dim:     #383838;
+    --text-muted:   #555;
+    --accent-sal:   #b8956a;
+    --accent-user:  #5a7a6a;
+    --state-live:   #c8c8c8;
+    --font-sal:     'EB Garamond', 'Lucida Bright', Georgia, serif;
+    --font-user:    'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --font-ui:      'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --radius:       10px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text-user);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 0 0 0;
+  }
+
+  /* ── header ── */
+  #header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  #header .name {
+    font-family: var(--font-sal);
+    font-size: 22px;
+    color: var(--accent-sal);
+    letter-spacing: 0.02em;
+  }
+
+  #header .subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── conversation ── */
+  #conversation {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 88%;
+  }
+
+  .message.sal { align-self: flex-start; }
+  .message.user { align-self: flex-end; }
+
+  .message .speaker {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 0 4px;
+  }
+
+  .message.sal .speaker { color: var(--accent-sal); opacity: 0.7; }
+  .message.user .speaker { color: var(--accent-user); opacity: 0.7; text-align: right; }
+
+  .message .bubble {
+    padding: 11px 16px;
+    border-radius: var(--radius);
+    line-height: 1.65;
+  }
+
+  .message.sal .bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-family: var(--font-sal);
+    font-size: 26px;
+    color: var(--text-sal);
+    border-bottom-left-radius: 3px;
+  }
+
+  .message.user .bubble {
+    background: #111a1a;
+    border: 1px solid #1c2a2a;
+    font-family: var(--font-user);
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--text-user);
+    border-bottom-right-radius: 3px;
+  }
+
+  /* ── transcription strip ── */
+  #transcription {
+    padding: 10px 24px;
+    border-top: 1px solid var(--border);
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+  }
+
+  #transcription .transcript-text {
+    font-family: var(--font-user);
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  #transcription .transcript-text.active {
+    color: var(--text-user);
+    font-style: normal;
+  }
+
+  /* ── state strip ── */
+  #state-strip {
+    padding: 10px 24px 14px;
+    display: flex;
+    gap: 22px;
+    align-items: center;
+  }
+
+  .state-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    transition: color 0.3s ease;
+  }
+
+  .state-label.live {
+    color: var(--state-live);
+  }
+
+  .state-label.live::before {
+    content: '·';
+    margin-right: 5px;
+    color: var(--accent-sal);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="header">
+    <span class="name">Salice</span>
+    <span class="subtitle">personal assistant</span>
+  </div>
+
+  <div id="conversation">
+
+    <div class="message sal">
+      <span class="speaker">Sal</span>
+      <div class="bubble">Good morning. I've been thinking about the question you left me with last night. The short answer is yes, but the longer answer is more interesting.</div>
+    </div>
+
+    <div class="message user">
+      <span class="speaker">Eirikur</span>
+      <div class="bubble">Tell me the longer answer then.</div>
+    </div>
+
+    <div class="message sal">
+      <span class="speaker">Sal</span>
+      <div class="bubble">It depends on what you mean by ready. If you mean technically capable, then yes, immediately. If you mean confident, that's a different question — and probably the one worth asking.</div>
+    </div>
+
+    <div class="message user">
+      <span class="speaker">Eirikur</span>
+      <div class="bubble">Fair point. What's your read on it?</div>
+    </div>
+
+    <div class="message sal">
+      <span class="speaker">Sal</span>
+      <div class="bubble">I think you already know. You're asking me because you want someone to say it out loud. So: yes. Go ahead.</div>
+    </div>
+
+  </div>
+
+  <div id="transcription">
+    <span class="transcript-text">— listening —</span>
+  </div>
+
+  <div id="state-strip">
+    <span class="state-label live">listening</span>
+    <span class="state-label">transcribing</span>
+    <span class="state-label">inference</span>
+    <span class="state-label">speaking</span>
+  </div>
+
+</div>
+</body>
+</html>

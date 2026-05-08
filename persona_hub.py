@@ -31,7 +31,7 @@ class VoiceProfile:
 @dataclass
 class InputProfile:
     name: str
-    stt_model: str = "base.en"
+    stt_model: str = "small.en"
     silence_duration: float = 0.6
 
 @dataclass
