@@ -5,7 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sal</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=EB+Garamond:ital,wght@0,400;1,400&display=swap');
+  @font-face {
+    font-family: 'Alegreya';
+    src: url('fonts/alegreya/Alegreya-Regular.otf') format('opentype');
+    font-weight: 400; font-style: normal;
+  }
+  @font-face {
+    font-family: 'Alegreya';
+    src: url('fonts/alegreya/Alegreya-Italic.otf') format('opentype');
+    font-weight: 400; font-style: italic;
+  }
+  @font-face {
+    font-family: 'Lucida Casual';
+    src: url('fonts/lucida-casual.ttf') format('truetype');
+    font-weight: 400; font-style: normal;
+  }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -20,9 +34,9 @@
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
     --state-live:   #c8c8c8;
-    --font-sal:     'EB Garamond', 'Lucida Bright', Georgia, serif;
-    --font-user:    'Inter', 'Helvetica Neue', Arial, sans-serif;
-    --font-ui:      'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --font-sal:     'Alegreya', Georgia, serif;
+    --font-user:    'Lucida Casual', 'Lucida Sans', sans-serif;
+    --font-ui:      'Lucida Casual', 'Lucida Sans', sans-serif;
     --radius:       10px;
   }
 
@@ -125,7 +139,7 @@
     border-bottom-right-radius: 3px;
   }
 
-  /* ── transcription strip ── */
+  /* ── input strip ── */
   #transcription {
     padding: 10px 24px;
     border-top: 1px solid var(--border);
@@ -134,18 +148,28 @@
     align-items: center;
   }
 
-  #transcription .transcript-text {
+  #text-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
     font-family: var(--font-user);
     font-size: 13px;
     font-weight: 300;
     color: var(--text-muted);
     font-style: italic;
+    caret-color: var(--text-user);
+    transition: color 0.15s ease;
   }
 
-  #transcription .transcript-text.active {
+  #text-input::placeholder { color: var(--text-muted); }
+
+  #text-input:focus {
     color: var(--text-user);
     font-style: normal;
   }
+
+  #text-input.corrected { color: var(--accent-sal); }
 
   /* ── state strip ── */
   #state-strip {
@@ -212,7 +236,7 @@
   </div>
 
   <div id="transcription">
-    <span class="transcript-text">— listening —</span>
+    <input id="text-input" type="text" placeholder="— listening —" autocomplete="off" spellcheck="false">
   </div>
 
   <div id="state-strip">
@@ -223,5 +247,38 @@
   </div>
 
 </div>
+<script>
+  const input = document.getElementById('text-input');
+  let focused = false;
+
+  input.addEventListener('focus', () => { focused = true; });
+  input.addEventListener('blur',  () => { focused = false; });
+
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    fetch('/converse', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text}),
+    });
+  });
+
+  const es = new EventSource('/events');
+  es.onmessage = e => {
+    if (focused) return;
+    const {type, text} = JSON.parse(e.data);
+    if (type === 'heard') {
+      input.value = text;
+      input.classList.remove('corrected');
+    } else if (type === 'corrected') {
+      input.value = text;
+      input.classList.add('corrected');
+      setTimeout(() => input.classList.remove('corrected'), 800);
+    }
+  };
+</script>
 </body>
 </html>

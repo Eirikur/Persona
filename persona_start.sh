@@ -42,9 +42,17 @@ tmux send-keys -t "$SESSION:speech-in" './persona_speech_input.py' Enter
 
 # Announce each service as it comes up, in sequence
 (
-    wait_and_speak 8402 "Speech up."
-    wait_and_speak 8401 "I'm awake."
-    wait_and_speak 8403 "I'm ready."
+    wait_and_speak 8402 "[clear throat]"
+    wait_and_speak 8401 "[sigh] [surprised] I'm waking up. [groan]"
+    wait_and_speak 8403 "I'm ready now! [chuckle]"
+) &
+
+# Open chat window once the hub is up
+(
+    until curl -sf "http://127.0.0.1:8400/openapi.json" >/dev/null 2>&1; do
+        sleep 0.5
+    done
+    chromium --app=http://localhost:8400/ui/persona_chat.html &
 ) &
 
 # Land on the hub window
