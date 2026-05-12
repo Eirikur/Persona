@@ -84,14 +84,17 @@ MODE = "named"
 
 # Shell commands triggered by voice. Values are passed to the shell.
 COMMANDS: dict[str, str] = {
-    "firefox":     "~/scripts/toggle.sh Firefox firefox",
+    "firefox":     "~/scripts/toggle.sh Firefox ~/Applications/firefox/firefox",
     "thunderbird": "~/scripts/toggle.sh Thunderbird thunderbird",
     "email":       "~/scripts/toggle.sh Thunderbird thunderbird",
-    "emacs":       "emacsclient -n -a '' -e '(eh/toggle-visible)'",
+    "emacs":       "wmctrl -R 'ξmacs:' || emacsclient -n -a '' ",
+    "restart":     "~/Proj/Persona/persona_start.sh &> ~/Proj/Persona/persona.log",
 }
 
 # STT mishearing corrections. Applied before any dispatch logic.
 MISHEARINGS: dict[str, str] = {
+    "emax":     "emacs",
+    "e-backs":  "emacs",
     "e-racks":  "emacs",
     "e-max":    "emacs",
     "imax":     "emacs",
@@ -120,6 +123,13 @@ def _emit(event_type: str, text: str) -> None:
     if not _loop:
         return
     data = json.dumps({"type": event_type, "text": text})
+    for q in _event_queues:
+        asyncio.run_coroutine_threadsafe(q.put(data), _loop)
+
+def _emit_sal(pname: str, text: str) -> None:
+    if not _loop:
+        return
+    data = json.dumps({"type": "sal_turn", "persona": pname, "text": text})
     for q in _event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), _loop)
 
@@ -240,6 +250,7 @@ def converse(req: ThinkRequest):
     if _speaking or (time.time() - _last_spoke < SPEAK_COOLDOWN):
         print(f"ignored (cooldown): {req.text!r}")
         return {"text": ""}
+    _emit("user_turn", req.text)
     responses = []
     for pname in to_respond:
         persona = state.personas[pname]
@@ -247,6 +258,7 @@ def converse(req: ThinkRequest):
         response = _llm(persona, req.text)
         if response:
             print(f"[{pname}] > {response}")
+            _emit_sal(pname, response)
             _speaking = True
             try:
                 _speak(response, voice.sample_file or "wav/bird-dream.wav")

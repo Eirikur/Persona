@@ -24,16 +24,16 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:           #080808;
-    --surface:      #111114;
-    --border:       #222228;
-    --text-user:    #c8c8c8;
-    --text-sal:     #e8d9c0;
-    --text-dim:     #383838;
-    --text-muted:   #555;
+    --bg:           #1E2B35;
+    --surface:      #2A3C48;
+    --border:       #304454;
+    --text-user:    #C4CDD5;
+    --text-sal:     #D0D8DF;
+    --text-dim:     #4A5A68;
+    --text-muted:   #607080;
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
-    --state-live:   #c8c8c8;
+    --state-live:   #C4CDD5;
     --font-sal:     'Alegreya', Georgia, serif;
     --font-user:    'Lucida Casual', 'Lucida Sans', sans-serif;
     --font-ui:      'Lucida Casual', 'Lucida Sans', sans-serif;
@@ -130,8 +130,8 @@
   }
 
   .message.user .bubble {
-    background: #111a1a;
-    border: 1px solid #1c2a2a;
+    background: #253540;
+    border: 1px solid #304454;
     font-family: var(--font-user);
     font-size: 20px;
     font-weight: 300;
@@ -139,37 +139,50 @@
     border-bottom-right-radius: 3px;
   }
 
+  /* ── stt preview ── */
+  #stt-preview {
+    padding: 6px 24px 2px;
+    min-height: 24px;
+    font-family: var(--font-user);
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #stt-preview.corrected { color: var(--accent-sal); }
+
   /* ── input strip ── */
   #transcription {
-    padding: 10px 24px;
+    padding: 6px 24px 10px;
     border-top: 1px solid var(--border);
-    min-height: 42px;
     display: flex;
     align-items: center;
+    gap: 8px;
+  }
+
+  #transcription::before {
+    content: '›';
+    color: var(--text-dim);
+    font-size: 16px;
+    flex-shrink: 0;
   }
 
   #text-input {
-    width: 100%;
+    flex: 1;
     background: transparent;
     border: none;
     outline: none;
     font-family: var(--font-user);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 300;
-    color: var(--text-muted);
-    font-style: italic;
-    caret-color: var(--text-user);
-    transition: color 0.15s ease;
-  }
-
-  #text-input::placeholder { color: var(--text-muted); }
-
-  #text-input:focus {
     color: var(--text-user);
-    font-style: normal;
+    caret-color: var(--text-user);
   }
 
-  #text-input.corrected { color: var(--accent-sal); }
+  #text-input::placeholder { color: var(--text-dim); }
 
   /* ── state strip ── */
   #state-strip {
@@ -235,8 +248,10 @@
 
   </div>
 
+  <div id="stt-preview"></div>
+
   <div id="transcription">
-    <input id="text-input" type="text" placeholder="— listening —" autocomplete="off" spellcheck="false">
+    <input id="text-input" type="text" placeholder="type here" autocomplete="off" spellcheck="false">
   </div>
 
   <div id="state-strip">
@@ -248,17 +263,33 @@
 
 </div>
 <script>
-  const input = document.getElementById('text-input');
-  let focused = false;
+  const input   = document.getElementById('text-input');
+  const conv    = document.getElementById('conversation');
+  const preview = document.getElementById('stt-preview');
+  const typedPending = new Set();
 
-  input.addEventListener('focus', () => { focused = true; });
-  input.addEventListener('blur',  () => { focused = false; });
+  function addBubble(cls, speaker, text) {
+    const msg = document.createElement('div');
+    msg.className = `message ${cls}`;
+    const sp = document.createElement('span');
+    sp.className = 'speaker';
+    sp.textContent = speaker;
+    const bub = document.createElement('div');
+    bub.className = 'bubble';
+    bub.textContent = text;
+    msg.appendChild(sp);
+    msg.appendChild(bub);
+    conv.appendChild(msg);
+    conv.scrollTop = conv.scrollHeight;
+  }
 
   input.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
+    typedPending.add(text);
+    addBubble('user', 'you', text);
     fetch('/converse', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -268,15 +299,24 @@
 
   const es = new EventSource('/events');
   es.onmessage = e => {
-    if (focused) return;
-    const {type, text} = JSON.parse(e.data);
+    const {type, text, persona} = JSON.parse(e.data);
     if (type === 'heard') {
-      input.value = text;
-      input.classList.remove('corrected');
+      preview.textContent = text;
+      preview.classList.remove('corrected');
     } else if (type === 'corrected') {
-      input.value = text;
-      input.classList.add('corrected');
-      setTimeout(() => input.classList.remove('corrected'), 800);
+      preview.textContent = text;
+      preview.classList.add('corrected');
+      setTimeout(() => preview.classList.remove('corrected'), 800);
+    } else if (type === 'user_turn') {
+      preview.textContent = '';
+      if (typedPending.has(text)) {
+        typedPending.delete(text);
+      } else {
+        addBubble('user', 'you', text);
+      }
+    } else if (type === 'sal_turn') {
+      const name = (!persona || persona === 'default') ? 'Sal' : persona;
+      addBubble('sal', name, text);
     }
   };
 </script>

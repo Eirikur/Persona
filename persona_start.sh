@@ -41,10 +41,12 @@ tmux new-window -t "$SESSION" -n speech-in -c "$DIR"
 tmux send-keys -t "$SESSION:speech-in" './persona_speech_input.py' Enter
 
 # Announce each service as it comes up, in sequence
+###
 (
     wait_and_speak 8402 "[clear throat]"
-    wait_and_speak 8401 "[sigh] [surprised] I'm waking up. [groan]"
-    wait_and_speak 8403 "I'm ready now! [chuckle]"
+    # wait_and_speak 8401 "[sigh] [surprised] I'm waking up. [groan]"
+    wait_and_speak 8401 "I'm waking up."
+    wait_and_speak 8403 "I'm ready."
 ) &
 
 # Open chat window once the hub is up
