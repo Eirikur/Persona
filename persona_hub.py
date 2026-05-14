@@ -101,6 +101,7 @@ MISHEARINGS: dict[str, str] = {
     "solace":   "salice",
     "alice":    "salice",
     "sal ease": "salice",
+    "ciao":     "salice",
 }
 
 BROADCAST_PHRASES = (
@@ -246,6 +247,7 @@ def converse(req: ThinkRequest):
     global _speaking, _last_spoke
     to_respond = _dispatch(req.text)
     if not to_respond:
+        _emit("speak_done", "")
         return {"text": ""}
     if _speaking or (time.time() - _last_spoke < SPEAK_COOLDOWN):
         print(f"ignored (cooldown): {req.text!r}")
@@ -266,6 +268,7 @@ def converse(req: ThinkRequest):
                 _speaking = False
                 _last_spoke = time.time()
         responses.append(response)
+    _emit("speak_done", "")
     return {"text": "\n".join(r for r in responses if r)}
 
 services = ['speech_input', 'llm', 'speech_output']

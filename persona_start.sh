@@ -3,6 +3,15 @@
 SESSION="persona"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
+NO_VOICE=0
+NO_ATTACH=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-voice)  NO_VOICE=1 ;;
+        --no-attach) NO_ATTACH=1 ;;
+    esac
+done
+
 # Kill any existing session
 tmux kill-session -t "$SESSION" 2>/dev/null
 
@@ -24,40 +33,53 @@ wait_and_speak() {
         -d "{\"text\": \"$message\"}" >/dev/null
 }
 
-# Speech output first — slowest (Chatterbox GPU), and needed for announcements
-tmux new-session -d -s "$SESSION" -n speech-out -c "$DIR"
-tmux send-keys -t "$SESSION:speech-out" './persona_speech_output.py' Enter
+if [ "$NO_VOICE" -eq 0 ]; then
+    # Speech output first — slowest (Chatterbox GPU), and needed for announcements
+    tmux new-session -d -s "$SESSION" -n speech-out -c "$DIR"
+    tmux send-keys -t "$SESSION:speech-out" './persona_speech_output.py' Enter
+
+    # LLM
+    tmux new-window -t "$SESSION" -n llm -c "$DIR"
+else
+    tmux new-session -d -s "$SESSION" -n llm -c "$DIR"
+fi
 
 # LLM
-tmux new-window -t "$SESSION" -n llm -c "$DIR"
 tmux send-keys -t "$SESSION:llm" './persona_llm.py' Enter
 
 # Hub
 tmux new-window -t "$SESSION" -n hub -c "$DIR"
 tmux send-keys -t "$SESSION:hub" './persona_hub.py' Enter
 
-# Speech input (loads Whisper)
-tmux new-window -t "$SESSION" -n speech-in -c "$DIR"
-tmux send-keys -t "$SESSION:speech-in" './persona_speech_input.py' Enter
+if [ "$NO_VOICE" -eq 0 ]; then
+    # Speech input (loads Whisper)
+    tmux new-window -t "$SESSION" -n speech-in -c "$DIR"
+    tmux send-keys -t "$SESSION:speech-in" './persona_speech_input.py' Enter
 
-# Announce each service as it comes up, in sequence
-###
-(
-    wait_and_speak 8402 "[clear throat]"
-    # wait_and_speak 8401 "[sigh] [surprised] I'm waking up. [groan]"
-    wait_and_speak 8401 "I'm waking up."
-    wait_and_speak 8403 "I'm ready."
-) &
+    # Announce each service as it comes up, in sequence
+    # Note: no announcement for speech-in (8403) — Whisper would transcribe it
+    (
+        wait_and_speak 8402 "[clear throat]"
+        wait_and_speak 8401 "I'm waking up."
+    ) &
+fi
 
 # Open chat window once the hub is up
 (
     until curl -sf "http://127.0.0.1:8400/openapi.json" >/dev/null 2>&1; do
         sleep 0.5
     done
-    chromium --app=http://localhost:8400/ui/persona_chat.html &
+    timeout 2 xdotool search --name "Sal" windowclose 2>/dev/null || true
+    pkill -TERM -f "persona_chat" 2>/dev/null
+    sleep 0.5
+    pkill -KILL -f "persona_chat" 2>/dev/null
+    sleep 0.3
+    chromium --app="http://localhost:8400/ui/persona_chat.html?v=$(date +%s)" --no-restore-last-session --window-size=1200,2000 &
 ) &
 
 # Land on the hub window
 tmux select-window -t "$SESSION:hub"
 
-tmux attach -t "$SESSION"
+if [ "$NO_ATTACH" -eq 0 ]; then
+    tmux attach -t "$SESSION"
+fi

@@ -219,34 +219,7 @@
     <span class="subtitle">personal assistant</span>
   </div>
 
-  <div id="conversation">
-
-    <div class="message sal">
-      <span class="speaker">Sal</span>
-      <div class="bubble">Good morning. I've been thinking about the question you left me with last night. The short answer is yes, but the longer answer is more interesting.</div>
-    </div>
-
-    <div class="message user">
-      <span class="speaker">Eirikur</span>
-      <div class="bubble">Tell me the longer answer then.</div>
-    </div>
-
-    <div class="message sal">
-      <span class="speaker">Sal</span>
-      <div class="bubble">It depends on what you mean by ready. If you mean technically capable, then yes, immediately. If you mean confident, that's a different question — and probably the one worth asking.</div>
-    </div>
-
-    <div class="message user">
-      <span class="speaker">Eirikur</span>
-      <div class="bubble">Fair point. What's your read on it?</div>
-    </div>
-
-    <div class="message sal">
-      <span class="speaker">Sal</span>
-      <div class="bubble">I think you already know. You're asking me because you want someone to say it out loud. So: yes. Go ahead.</div>
-    </div>
-
-  </div>
+  <div id="conversation"></div>
 
   <div id="stt-preview"></div>
 
@@ -255,10 +228,10 @@
   </div>
 
   <div id="state-strip">
-    <span class="state-label live">listening</span>
-    <span class="state-label">transcribing</span>
-    <span class="state-label">inference</span>
-    <span class="state-label">speaking</span>
+    <span id="state-listening"    class="state-label">listening</span>
+    <span id="state-transcribing" class="state-label">transcribing</span>
+    <span id="state-inference"    class="state-label">inference</span>
+    <span id="state-speaking"     class="state-label">speaking</span>
   </div>
 
 </div>
@@ -267,6 +240,19 @@
   const conv    = document.getElementById('conversation');
   const preview = document.getElementById('stt-preview');
   const typedPending = new Set();
+
+  const stateEls = {
+    listening:    document.getElementById('state-listening'),
+    transcribing: document.getElementById('state-transcribing'),
+    inference:    document.getElementById('state-inference'),
+    speaking:     document.getElementById('state-speaking'),
+  };
+
+  function setLive(name) {
+    for (const [k, el] of Object.entries(stateEls)) {
+      el.classList.toggle('live', k === name);
+    }
+  }
 
   function addBubble(cls, speaker, text) {
     const msg = document.createElement('div');
@@ -297,28 +283,42 @@
     });
   });
 
-  const es = new EventSource('/events');
-  es.onmessage = e => {
-    const {type, text, persona} = JSON.parse(e.data);
-    if (type === 'heard') {
-      preview.textContent = text;
-      preview.classList.remove('corrected');
-    } else if (type === 'corrected') {
-      preview.textContent = text;
-      preview.classList.add('corrected');
-      setTimeout(() => preview.classList.remove('corrected'), 800);
-    } else if (type === 'user_turn') {
-      preview.textContent = '';
-      if (typedPending.has(text)) {
-        typedPending.delete(text);
-      } else {
-        addBubble('user', 'you', text);
+  function connectSSE() {
+    const es = new EventSource('/events');
+
+    es.onopen = () => setLive('listening');
+
+    es.onerror = () => setLive(null);
+
+    es.onmessage = e => {
+      const {type, text, persona} = JSON.parse(e.data);
+      if (type === 'heard') {
+        preview.textContent = text;
+        preview.classList.remove('corrected');
+        setLive('transcribing');
+      } else if (type === 'corrected') {
+        preview.textContent = text;
+        preview.classList.add('corrected');
+        setTimeout(() => preview.classList.remove('corrected'), 800);
+      } else if (type === 'user_turn') {
+        preview.textContent = '';
+        setLive('inference');
+        if (typedPending.has(text)) {
+          typedPending.delete(text);
+        } else {
+          addBubble('user', 'you', text);
+        }
+      } else if (type === 'sal_turn') {
+        setLive('speaking');
+        const name = (!persona || persona === 'default') ? 'Sal' : persona;
+        addBubble('sal', name, text);
+      } else if (type === 'speak_done') {
+        setLive('listening');
       }
-    } else if (type === 'sal_turn') {
-      const name = (!persona || persona === 'default') ? 'Sal' : persona;
-      addBubble('sal', name, text);
-    }
-  };
+    };
+  }
+
+  connectSSE();
 </script>
 </body>
 </html>
