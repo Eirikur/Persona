@@ -8,81 +8,41 @@
 # ]
 # ///
 
+"""Persona Hub — voice assistant routing server.
+
+Merges speech and keyboard input, dispatches to personas, and serves the chat UI.
+Single input source feeds four destinations: system commands, shell commands,
+the active habitat (persona group), or a broadcast to all loaded personas.
+"""
+
 import asyncio
 import json
+import re
 import subprocess
 import time
 import uvicorn
 import httpx
-from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-PORT = 8400
-LLM_URL = "http://127.0.0.1:8401"
+from persona_schemas import Persona, load, save
+
+
+# ─── Configuration ────────────────────────────────────────────────────────────
+
+PORT              = 8400
+LLM_URL           = "http://127.0.0.1:8401"
 SPEECH_OUTPUT_URL = "http://127.0.0.1:8402"
-STATE_FILE = Path.home() / ".config" / "persona" / "state.json"
 
-@dataclass
-class VoiceProfile:
-    name: str
-    sample_file: str = ""
-    speed: float = 1.0
-
-@dataclass
-class InputProfile:
-    name: str
-    stt_model: str = "small.en"
-    silence_duration: float = 0.6
-
-@dataclass
-class Persona:
-    name: str
-    wake_words: list[str] = field(default_factory=list)
-    system_prompt: str = "You are Salice, a helpful voice assistant. Keep responses short and conversational — you are speaking aloud, not writing. Two or three sentences at most unless asked for more."
-    voice: str = "default"
-    input: str = "default"
-    provider: str = "ollama"
-    model: str | None = None
-
-@dataclass
-class GlobalState:
-    active_persona: str = "default"
-    loaded_personas: list[str] = field(default_factory=lambda: ["default"])
-    personas: dict[str, Persona]      = field(default_factory=lambda: {"default": Persona(name="default", wake_words=["salice", "sal"])})
-    voices:   dict[str, VoiceProfile] = field(default_factory=lambda: {"default": VoiceProfile(name="default")})
-    inputs:   dict[str, InputProfile] = field(default_factory=lambda: {"default": InputProfile(name="default")})
-
-def _load() -> GlobalState:
-    if not STATE_FILE.exists():
-        return GlobalState()
-    data = json.loads(STATE_FILE.read_text())
-    personas = {k: Persona(**v) for k, v in data.get("personas", {}).items()}
-    # Migrate: persona saved before wake_words was added
-    if "default" in personas and not personas["default"].wake_words:
-        personas["default"].wake_words = ["salice", "sal"]
-    return GlobalState(
-        active_persona  =data.get("active_persona", "default"),
-        loaded_personas =data.get("loaded_personas", ["default"]),
-        personas=personas,
-        voices  ={k: VoiceProfile(**v) for k, v in data.get("voices",   {}).items()},
-        inputs  ={k: InputProfile(**v) for k, v in data.get("inputs",   {}).items()},
-    )
-
-def _save(s: GlobalState) -> None:
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(asdict(s), indent=2))
-
-state = _load()
-_speaking = False
-_last_spoke = 0.0
 SPEAK_COOLDOWN = 8.0
-MODE = "named"
 
-# Shell commands triggered by voice. Values are passed to the shell.
+
+# ─── Dispatch Tables ──────────────────────────────────────────────────────────
+
+# Shell commands triggered by voice. Each key is matched against normalized input.
 COMMANDS: dict[str, str] = {
     "firefox":     "~/scripts/toggle.sh Firefox ~/Applications/firefox/firefox",
     "thunderbird": "~/scripts/toggle.sh Thunderbird thunderbird",
@@ -91,7 +51,7 @@ COMMANDS: dict[str, str] = {
     "restart":     "~/Proj/Persona/persona_start.sh &> ~/Proj/Persona/persona.log",
 }
 
-# STT mishearing corrections. Applied before any dispatch logic.
+# STT mishearing corrections. Applied to every input before dispatch.
 MISHEARINGS: dict[str, str] = {
     "emax":     "emacs",
     "e-backs":  "emacs",
@@ -104,40 +64,60 @@ MISHEARINGS: dict[str, str] = {
     "ciao":     "salice",
 }
 
+# Phrases that route input to all loaded personas simultaneously.
 BROADCAST_PHRASES = (
-    "hi gang", "hello gang", "hey gang",
-    "hi everyone", "hello everyone", "hey everyone",
+    "hi gang",    "hello gang",    "hey gang",
+    "hi everyone","hello everyone","hey everyone",
 )
 
-app = FastAPI()
+
+# ─── Runtime State ────────────────────────────────────────────────────────────
+
+state      = load()
+speaking   = False
+last_spoke = 0.0
+MODE       = "named"   # "named" = wake-word required, "open" = always listening
+
+
+# ─── FastAPI App & SSE Event Bus ──────────────────────────────────────────────
+
+app = FastAPI(title="Persona Chat", description="AI model habitat")
 app.mount("/ui", StaticFiles(directory=Path(__file__).parent, html=True), name="ui")
 
-_event_queues: list[asyncio.Queue] = []
-_loop: asyncio.AbstractEventLoop | None = None
+event_queues: list[asyncio.Queue]          = []
+event_loop:   asyncio.AbstractEventLoop | None = None
+
 
 @app.on_event("startup")
-async def _capture_loop():
-    global _loop
-    _loop = asyncio.get_running_loop()
+async def capture_loop():
+    global event_loop
+    event_loop = asyncio.get_running_loop()
 
-def _emit(event_type: str, text: str) -> None:
-    if not _loop:
+
+def emit(event_type: str, text: str) -> None:
+    """Push a generic event to all connected SSE clients."""
+    if not event_loop:
         return
     data = json.dumps({"type": event_type, "text": text})
-    for q in _event_queues:
-        asyncio.run_coroutine_threadsafe(q.put(data), _loop)
+    for q in event_queues:
+        asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
 
-def _emit_sal(pname: str, text: str) -> None:
-    if not _loop:
+
+def emit_sal(persona_name: str, text: str) -> None:
+    """Push a persona response event to all connected SSE clients."""
+    if not event_loop:
         return
-    data = json.dumps({"type": "sal_turn", "persona": pname, "text": text})
-    for q in _event_queues:
-        asyncio.run_coroutine_threadsafe(q.put(data), _loop)
+    data = json.dumps({"type": "sal_turn", "persona": persona_name, "text": text})
+    for q in event_queues:
+        asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
+
 
 @app.get("/events")
 async def events():
+    """SSE endpoint — clients connect here to receive real-time chat events."""
     q: asyncio.Queue = asyncio.Queue()
-    _event_queues.append(q)
+    event_queues.append(q)
+
     async def generate():
         try:
             while True:
@@ -148,46 +128,73 @@ async def events():
                     yield ": keepalive\n\n"
         finally:
             try:
-                _event_queues.remove(q)
+                event_queues.remove(q)
             except ValueError:
                 pass
+
     return StreamingResponse(generate(), media_type="text/event-stream", headers={
-        "Cache-Control": "no-cache",
+        "Cache-Control":    "no-cache",
         "X-Accel-Buffering": "no",
     })
 
-class ThinkRequest(BaseModel):
-    text: str
 
-def _llm(persona: Persona, text: str) -> str:
+# ─── LLM & Speech Clients ─────────────────────────────────────────────────────
+
+def llm(persona: Persona, text: str) -> str:
+    """Send text to the LLM service and return the response string."""
     r = httpx.post(f"{LLM_URL}/v1/chat/completions", timeout=60.0, json={
-        "provider": persona.provider,
-        "model": persona.model,
+        "provider":      persona.provider,
+        "model":         persona.model,
         "system_prompt": persona.system_prompt,
-        "messages": [{"role": "user", "content": text}],
+        "messages":      [{"role": "user", "content": text}],
     })
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
 
-def _speak(response_text: str, voice_prompt: str) -> None:
+
+def speak(response_text: str, voice_prompt: str) -> None:
+    """Send text to the speech output service. Silent no-op if service is down."""
     try:
         httpx.post(f"{SPEECH_OUTPUT_URL}/speak", timeout=120.0, json={
-            "text": response_text,
+            "text":         response_text,
             "voice_prompt": voice_prompt,
         }).raise_for_status()
     except httpx.ConnectError:
         print("speech output not available")
 
-def _dispatch(text: str) -> list[str]:
-    """Return list of persona names that should respond. Empty list = no response needed."""
+
+# ─── Dispatch Logic ───────────────────────────────────────────────────────────
+
+def dispatch(text: str) -> list[str]:
+    """
+    Decide which loaded personas should respond to this input.
+
+    Returns a list of persona names. Empty list = no response needed.
+
+    Routing order:
+      1. Apply MISHEARINGS corrections
+      2. "stop"            → interrupt speech, return []
+      3. COMMANDS match    → run shell command, return []
+      4. Quiet phrases     → switch to named mode, return []
+      5. BROADCAST_PHRASES → all loaded personas
+      6. Named mode        → persona whose wake word matches, or []
+      7. Open mode         → all loaded personas
+    """
     global MODE
+
     normalized = text.strip().lower().rstrip(".,!")
-    original = normalized
+    original   = normalized
+
+    # Whole-word replacement only: \b marks a word boundary, so "alice"
+    # corrects to "salice" but the "alice" inside "salice" is left alone.
     for heard, intended in MISHEARINGS.items():
-        normalized = normalized.replace(heard, intended)
-    _emit("heard", original)
+        pattern = r"\b" + re.escape(heard) + r"\b"
+        normalized = re.sub(pattern, intended, normalized)
+
+    emit("heard", original)
     if normalized != original:
-        _emit("corrected", normalized)
+        emit("corrected", normalized)
+
     print(f"[{MODE}] dispatch: {normalized!r}")
 
     if normalized.startswith("stop"):
@@ -219,17 +226,27 @@ def _dispatch(text: str) -> list[str]:
             for ww in persona.wake_words:
                 if normalized.startswith(ww):
                     return [pname]
-        return []  # not addressed to any loaded persona
+        return []
 
     return list(loaded)
 
+
+# ─── API Routes ───────────────────────────────────────────────────────────────
+
+class ThinkRequest(BaseModel):
+    text: str
+
+
 @app.post("/think")
 def think(req: ThinkRequest):
+    """Send text directly to the active persona's LLM. No dispatch, no speech."""
     persona = state.personas[state.active_persona]
-    return {"text": _llm(persona, req.text)}
+    return {"text": llm(persona, req.text)}
+
 
 @app.post("/mode/{mode}")
 def set_mode(mode: str):
+    """Switch between 'named' (wake-word required) and 'open' (always listening) modes."""
     global MODE
     if mode not in {"open", "named"}:
         return {"error": f"unknown mode {mode!r}"}
@@ -237,44 +254,55 @@ def set_mode(mode: str):
     print(f"mode → {mode}")
     return {"mode": MODE}
 
+
 @app.post("/stop")
 def stop():
+    """Interrupt current speech output."""
     httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0).raise_for_status()
+    
     return {"ok": True}
+
 
 @app.post("/converse")
 def converse(req: ThinkRequest):
-    global _speaking, _last_spoke
-    to_respond = _dispatch(req.text)
+    """
+    Main input endpoint. Accepts merged speech+keyboard text, dispatches to
+    personas, runs LLM inference, and speaks each response in turn.
+    """
+    global speaking, last_spoke
+
+    to_respond = dispatch(req.text)
     if not to_respond:
-        _emit("speak_done", "")
+        emit("speak_done", "")
         return {"text": ""}
-    if _speaking or (time.time() - _last_spoke < SPEAK_COOLDOWN):
+
+    if speaking or (time.time() - last_spoke < SPEAK_COOLDOWN):
         print(f"ignored (cooldown): {req.text!r}")
         return {"text": ""}
-    _emit("user_turn", req.text)
+
+    emit("user_turn", req.text)
     responses = []
+
     for pname in to_respond:
-        persona = state.personas[pname]
-        voice = state.voices.get(persona.voice, state.voices["default"])
-        response = _llm(persona, req.text)
+        persona  = state.personas[pname]
+        voice    = state.voices.get(persona.voice, state.voices["default"])
+        response = llm(persona, req.text)
         if response:
             print(f"[{pname}] > {response}")
-            _emit_sal(pname, response)
-            _speaking = True
+            emit_sal(pname, response)
+            speaking = True
             try:
-                _speak(response, voice.sample_file or "wav/bird-dream.wav")
+                speak(response, voice.sample_file or "audio/bird-dream.wav")
             finally:
-                _speaking = False
-                _last_spoke = time.time()
+                speaking   = False
+                last_spoke = time.time()
         responses.append(response)
-    _emit("speak_done", "")
+
+    emit("speak_done", "")
     return {"text": "\n".join(r for r in responses if r)}
 
-services = ['speech_input', 'llm', 'speech_output']
 
-def check_services():
-    pass
+# ─── Entry Point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=PORT)

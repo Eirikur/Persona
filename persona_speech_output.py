@@ -35,7 +35,7 @@ import torch
 
 PORT = 8402
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-DEFAULT_VOICE_PROMPT = 'wav/bird-dream.wav'
+DEFAULT_VOICE_PROMPT = 'audio/bird-dream.wav'
 
 print(f"Loading Chatterbox Turbo on {DEVICE.upper()}...")
 _t = time.time()

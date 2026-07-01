@@ -276,7 +276,7 @@
     input.value = '';
     typedPending.add(text);
     addBubble('user', 'you', text);
-    fetch('/converse', {
+    fetch('o/converse', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({text}),
@@ -317,7 +317,6 @@
       }
     };
   }
-
   connectSSE();
 </script>
 </body>

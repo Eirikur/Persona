@@ -156,7 +156,7 @@ class TranscriptionWorker:
             # Run a warm-up transcription
             current_dir = os.path.dirname(os.path.realpath(__file__))
             warmup_audio_path = os.path.join(
-                current_dir, "warmup_audio.wav"
+                current_dir, "audio", "warmup_audio.wav"
             )
             warmup_audio_data, _ = sf.read(warmup_audio_path, dtype="float32")
             segments, info = model.transcribe(warmup_audio_data, language="en", beam_size=1)
@@ -804,7 +804,7 @@ class AudioToTextRecorder:
                 # Run a warm-up transcription
                 current_dir = os.path.dirname(os.path.realpath(__file__))
                 warmup_audio_path = os.path.join(
-                    current_dir, "warmup_audio.wav"
+                    current_dir, "audio", "warmup_audio.wav"
                 )
                 warmup_audio_data, _ = sf.read(warmup_audio_path, dtype="float32")
                 segments, info = self.realtime_model_type.transcribe(warmup_audio_data, language="en", beam_size=1)

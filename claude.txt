@@ -1,0 +1,78 @@
+I need your help with persona_hub.py
+1) Please think about my desire to simplify things by splitting up this file.
+   Report back to me before proceeding. What is better? Several files? Hide some files in a
+   in a lib/ subdirectory?
+   Just refactor and reformat (more white space, more comments) this file?
+   I shouldn't care this much, but this file feels burdensome.
+   Create a plan to rewrite persona_hub in a style that I can read and
+   work with. I shouldn't have accepted this code.
+
+   Candidate strategies for a rewrite:
+      Use comment banners for clarity.
+      Increase comments.
+      Use docstrings.
+      Remove unused code.
+      Remove leading underscores. They are not used consistent with any rule that I know.
+      
+      Move the dataclasses into a new file to get them out of here.
+      Just import them. persona_schemas.py
+
+      There is only one input source, which is a merger of speech and keyboard.
+      This should be clear and very obvious.
+
+      The @app.post routes are confusing to me.
+      The /converse route is a problem for future flow control with multiple personas.
+      There's no single active persona. I think we need something like a chat-room object
+      that receives user input. It has a list of personas that are present, so input can be
+      passed to them. (You suggested that personas could only hear without responding if they
+      receive the text in their prompt. In the persona object logic, when input is received,
+      there's a condition (if active) that sends the input as a prompt, or formats it
+      something like this <You hear the following text but do not respond to it>.
+      
+
+      Dispatch could be its own file. Hub might be just the logic
+      flow.  There are 4 destinations for this incoming text.
+      I'd like this to be very simple, clear, lots of whitespace.
+      
+      1) System. Commands to the Persona program. "shut down" 
+      2) External Commands. Provides speech triggered shell commands.
+      3) Today there's the one persona. Let's create "habitat" that is the chat
+      room. So this destination becomes the habitat. It has the list
+      of active/loaded personas. Needs design for when text arrives, it
+      is sent to each persona that's here. The persona checks it's named/open
+      mode or code here checks it...to see if it should reply.
+      4) "Hey, gang!" broadcast messages to all active personas here.
+
+      There are several lists or dicts for text processing.
+      There will be a table editor to edit these.
+      1) Mishearings. Only on the speech input.
+      2) System commands map to function calls.
+      3) External commands to send to a shell. 
+         Use one 'launcher' function and just use this list mapping.
+	 Multiple shell subprocesses are allowed.
+	 Receive success or failure of these shell commands. Purpose is to show
+	 a notice somewhere in the chat window, perhaps a button becomes highlighted
+	 and can be clicked to show status. A tooltip here would be great. The
+	 success or failure should be logged. On failure, add the stderr output to the log message.
+      4) Broadcast-message introducer strings. 	 
+
+Required fix:
+Find and refactor the definition of "BROADCAST_PHRASES". That code is crazy-looking
+and Emacs won't find strings there. I think the issue is the use of "Literal".
+
+Tell me how to use the Claude Code todo list.
+
+
+
+For another session, later:
+Change 'Salice' label to Persona Chat
+Chat window should have a tab bar. I'd rather that it wasn't tall.
+New tab: Logs
+<more to come>
+New tab: <name?> Settings Editor
+This is a simple key/value editor for the data classes that define
+internal objects and settings. It would be nice if it could be hierarchical
+although it probably should not mix settings and object definitions. Hmmm.
+maybe it should mix them because we don't distinguish between them, do we?
+
+
