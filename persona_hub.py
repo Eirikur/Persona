@@ -165,11 +165,15 @@ def speak(response_text: str, voice_prompt: str) -> None:
 
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
-def dispatch(text: str) -> list[str]:
+def dispatch(text: str, typed: bool = False) -> list[str]:
     """
     Decide which loaded personas should respond to this input.
 
     Returns a list of persona names. Empty list = no response needed.
+
+    `typed` input (from the chat box) is a deliberate, addressed act, so it
+    skips the named-mode wake-word gate and reaches the loaded personas
+    directly. Only voice input is gated by wake words in named mode.
 
     Routing order:
       1. Apply MISHEARINGS corrections
@@ -177,8 +181,8 @@ def dispatch(text: str) -> list[str]:
       3. COMMANDS match    → run shell command, return []
       4. Quiet phrases     → switch to named mode, return []
       5. BROADCAST_PHRASES → all loaded personas
-      6. Named mode        → persona whose wake word matches, or []
-      7. Open mode         → all loaded personas
+      6. Named mode + voice → persona whose wake word matches, or []
+      7. Open mode or typed → all loaded personas
     """
     global MODE
 
@@ -218,7 +222,7 @@ def dispatch(text: str) -> list[str]:
         if normalized.startswith(phrase):
             return list(loaded)
 
-    if MODE == "named":
+    if MODE == "named" and not typed:
         for pname in loaded:
             persona = state.personas.get(pname)
             if not persona:
@@ -235,6 +239,7 @@ def dispatch(text: str) -> list[str]:
 
 class ThinkRequest(BaseModel):
     text: str
+    typed: bool = False   # True = from chat box, skips wake-word gate + cooldown
 
 
 @app.post("/think")
@@ -271,12 +276,12 @@ def converse(req: ThinkRequest):
     """
     global speaking, last_spoke
 
-    to_respond = dispatch(req.text)
+    to_respond = dispatch(req.text, req.typed)
     if not to_respond:
         emit("speak_done", "")
         return {"text": ""}
 
-    if speaking or (time.time() - last_spoke < SPEAK_COOLDOWN):
+    if not req.typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
         print(f"ignored (cooldown): {req.text!r}")
         return {"text": ""}
 

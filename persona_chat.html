@@ -276,10 +276,10 @@
     input.value = '';
     typedPending.add(text);
     addBubble('user', 'you', text);
-    fetch('o/converse', {
+    fetch('/converse', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text}),
+      body: JSON.stringify({text, typed: true}),
     });
   });
 

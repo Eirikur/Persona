@@ -27,9 +27,11 @@ import threading
 from contextlib import asynccontextmanager
 
 import httpx
+import torch
 import uvicorn
 from fastapi import FastAPI
 
+torch.backends.nnpack.enabled = False  # silence unsupported-hardware NNPACK warnings
 from persona_audio_recorder import AudioToTextRecorder
 
 PORT = 8403
