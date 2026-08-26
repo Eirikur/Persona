@@ -11,14 +11,37 @@ loaded personas.
 |--------------------------|------|---------------------------------------|
 | persona_hub.py           | 8400 | Routing, dispatch, chat UI, SSE       |
 | persona_llm.py           | 8401 | LLM inference (ollama and others)     |
-| persona_speech_output.py | 8402 | TTS (Chatterbox, GPU)                 |
+| persona_speech_output.py | 8402 | TTS (Chatterbox, CPU)                 |
 | persona_speech_input.py  | 8403 | STT (Whisper)                         |
 
 Shared dataclasses and state live in `persona_schemas.py`
 (state file: `~/.config/persona/state.json`).
 
 Run: `./persona_start.sh [--no-voice] [--no-attach]` — tmux session "persona".
-`--no-voice` skips the GPU speech services; use it when verifying hub changes.
+`--no-voice` skips the speech services; use it when verifying hub changes.
+
+## Hardware — AMD, not NVIDIA
+
+This runs on a Strix Halo box (Radeon 8060S, gfx1151) with ROCm 7.2.2
+installed. Read `notes/2026-08-10-rocm-amd-port.md` before touching speech
+input, speech output, torch, ROCm, or GPU-related dependencies.
+
+Current decision: Chatterbox TTS runs on the CPU. It is faster than the iGPU on
+this machine, and it leaves the GPU free for LLM and Whisper work. Whisper is
+expected to benefit from the GPU.
+
+## Process — keep the ground solid
+
+The owner may be working with low energy or after interrupted sessions. Before
+making important changes, help re-establish solid ground.
+
+- Check `git status --short` before editing.
+- If there are uncommitted changes that are not part of the current task, save
+  them outside the repo before resetting or cleaning.
+- Make one small change at a time.
+- Test one service directly before testing the full Persona stack.
+- Commit each known-good step before starting the next risky change.
+- Prefer explicit handoff notes over relying on memory.
 
 ## Code style — read this before writing any code
 
