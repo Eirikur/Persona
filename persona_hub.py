@@ -61,7 +61,9 @@ MISHEARINGS: dict[str, str] = {
     "solace":   "salice",
     "alice":    "salice",
     "sal ease": "salice",
+    "salish":    "salice",
     "ciao":     "salice",
+
 }
 
 # Phrases that route input to all loaded personas simultaneously.
@@ -265,6 +267,15 @@ def stop():
     """Interrupt current speech output."""
     httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0).raise_for_status()
     
+    return {"ok": True}
+
+
+@app.post("/shutdown")
+def shutdown():
+    """Shut down the entire Persona system by executing the shutdown script."""
+    print("shutdown request received")
+    # We use Popen so the server can return a response before it's killed
+    subprocess.Popen(["/bin/bash", "./persona_shutdown.sh"])
     return {"ok": True}
 
 

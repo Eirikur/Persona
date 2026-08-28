@@ -248,10 +248,36 @@
     speaking:     document.getElementById('state-speaking'),
   };
 
+  let currentState = null;
+  let minEndTime = 0;
+  let statePromise = Promise.resolve();
+
   function setLive(name) {
-    for (const [k, el] of Object.entries(stateEls)) {
-      el.classList.toggle('live', k === name);
-    }
+    console.log(`setLive requested: ${name} (current: ${currentState}, minEndTime: ${minEndTime})`);
+    statePromise = statePromise.then(async () => {
+      if (name === currentState) {
+        console.log(`setLive: ${name} is already current, skipping`);
+        return;
+      }
+
+      if (Date.now() < minEndTime) {
+        const wait = minEndTime - Date.now();
+        console.log(`setLive: waiting ${wait}ms before transitioning to ${name}`);
+        await new Promise(resolve => setTimeout(resolve, wait));
+      }
+
+      for (const [k, el] of Object.entries(stateEls)) {
+        el.classList.toggle('live', k === name);
+      }
+      currentState = name;
+      console.log(`setLive: transitioned to ${name}`);
+
+      if (name === 'transcribing' || name === 'inference') {
+        minEndTime = Date.now() + 2000;
+      } else {
+        minEndTime = 0;
+      }
+    });
   }
 
   function addBubble(cls, speaker, text) {
@@ -291,7 +317,9 @@
     es.onerror = () => setLive(null);
 
     es.onmessage = e => {
-      const {type, text, persona} = JSON.parse(e.data);
+      const data = JSON.parse(e.data);
+      console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
+      const {type, text, persona} = data;
       if (type === 'heard') {
         preview.textContent = text;
         preview.classList.remove('corrected');
@@ -318,6 +346,10 @@
     };
   }
   connectSSE();
+
+  window.addEventListener('unload', () => {
+    navigator.sendBeacon('/shutdown');
+  });
 </script>
 </body>
 </html>

@@ -58,10 +58,6 @@ if [ "$NO_VOICE" -eq 0 ]; then
 
     # Announce each service as it comes up, in sequence
     # Note: no announcement for speech-in (8403) — Whisper would transcribe it
-    (
-        wait_and_speak 8402 "[clear throat]"
-        wait_and_speak 8401 "I'm waking up."
-    ) &
 fi
 
 # Open chat window once the hub is up
