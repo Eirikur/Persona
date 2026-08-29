@@ -39,7 +39,9 @@ HUB_URL = "http://127.0.0.1:8400"
 
 
 def _detect_device():
-    return 'cpu', 'int8'
+    if torch.cuda.is_available():
+        return "cuda", "float16"
+    return "cpu", "int8"
 
 
 def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
@@ -76,7 +78,7 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
 async def lifespan(app: FastAPI):
     t = threading.Thread(
         target=_recorder_loop,
-        args=(HUB_URL, "tiny.en", 0.6),
+        args=(HUB_URL, "base.en", 0.6),
         daemon=True,
     )
     t.start()

@@ -262,6 +262,26 @@ def set_mode(mode: str):
     return {"mode": MODE}
 
 
+@app.post("/model/{model}")
+def set_model(model: str):
+    """Update the model for the active persona."""
+    persona = state.personas[state.active_persona]
+    persona.model = model
+    save(state)
+    print(f"active persona {state.active_persona} model → {model}")
+    return {"active_persona": state.active_persona, "model": model}
+
+
+@app.post("/provider/{provider}")
+def set_provider(provider: str):
+    """Update the provider for the active persona."""
+    persona = state.personas[state.active_persona]
+    persona.provider = provider
+    save(state)
+    print(f"active persona {state.active_persona} provider → {provider}")
+    return {"active_persona": state.active_persona, "provider": provider}
+
+
 @app.post("/stop")
 def stop():
     """Interrupt current speech output."""

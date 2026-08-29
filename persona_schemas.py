@@ -46,7 +46,7 @@ class Persona:
                           "at most unless asked for more.")
     voice: str = "default"
     input: str = "default"
-    provider: str = "ollama"
+    provider: str = "cerebras"
     model: str | None = None
 
 

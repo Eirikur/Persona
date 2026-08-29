@@ -17,10 +17,11 @@ from pydantic import BaseModel
 PORT = 8401
 
 _PROVIDERS = {
-    "ollama":     ("http://localhost:11434/v1",  None,               "qwen3:8b"),
+    "ollama":     ("http://localhost:11434/v1",  None,               "gemma2"),
     "openai":     (None,                         "OPENAI_API_KEY",   "gpt-4o-mini"),
-    "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "llama-3.3-70b"),
+    "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "gemma-4-31b"),
     "perplexity": ("https://api.perplexity.ai",  "PPLX_API_KEY",     "sonar"),
+    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "google/gemini-2.0-flash-001"),
     "z800":       ("http://z800.local:11434/v1", None,               "gemma3:latest"),
     "llamacpp":   ("http://z800.local:8080/v1",  None,               None),
     "vllm":       ("http://z800.local:8000/v1",  None,               None),

@@ -1,0 +1,10 @@
+### How to manage services manually:                                                                                                          
+                                                                                                                                               
+ You can now use standard systemctl commands:                                                                                                  
+ - Start everything: systemctl --user start persona.target                                                                                     
+ - Stop everything: systemctl --user stop persona.target                                                                                       
+ - Check status: systemctl --user status persona-hub (or any other service)                                                                    
+ - View logs: tail -f logs/hub.log or journalctl --user -u persona-hub                                                                         
+                                                                                                                                               
+ The persona_start.sh script remains the easiest way to launch the whole stack with the UI.                                                    
+
