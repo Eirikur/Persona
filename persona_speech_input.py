@@ -78,7 +78,7 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
 async def lifespan(app: FastAPI):
     t = threading.Thread(
         target=_recorder_loop,
-        args=(HUB_URL, "base.en", 0.6),
+        args=(HUB_URL, "small.en", 0.6),
         daemon=True,
     )
     t.start()
