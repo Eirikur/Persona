@@ -16,6 +16,7 @@
 #    "webrtcvad",
 #    "openwakeword",
 #    "pvporcupine",
+#    "RealtimeSTT",
 #    "halo",
 #    "nvidia-cublas-cu12",
 #    "nvidia-cudnn-cu12",
@@ -32,7 +33,7 @@ import uvicorn
 from fastapi import FastAPI
 
 torch.backends.nnpack.enabled = False  # silence unsupported-hardware NNPACK warnings
-from persona_audio_recorder import AudioToTextRecorder
+from RealtimeSTT import AudioToTextRecorder
 
 PORT = 8403
 HUB_URL = "http://127.0.0.1:8400"

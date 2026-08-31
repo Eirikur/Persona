@@ -91,9 +91,27 @@ event_loop:   asyncio.AbstractEventLoop | None = None
 
 
 @app.on_event("startup")
-async def capture_loop():
+async def startup_event():
+    """Initialize the event loop and warm up the active LLM to reduce first-turn latency."""
     global event_loop
     event_loop = asyncio.get_running_loop()
+
+    # Warmup the active persona's LLM to avoid first-turn latency (e.g. Ollama loading)
+    try:
+        active_name = state.active_persona
+        persona = state.personas.get(active_name)
+        if persona:
+            print(f"Warming up LLM for {active_name} ({persona.provider})...")
+            async with httpx.AsyncClient() as client:
+                await client.post(f"{LLM_URL}/v1/chat/completions", timeout=60.0, json={
+                    "provider":      persona.provider,
+                    "model":         persona.model,
+                    "system_prompt": persona.system_prompt,
+                    "messages":      [{"role": "user", "content": "warmup"}],
+                })
+            print("LLM warmup complete.")
+    except Exception as e:
+        print(f"LLM warmup failed: {e}")
 
 
 def emit(event_type: str, text: str) -> None:
@@ -307,6 +325,7 @@ def converse(req: ThinkRequest):
     """
     global speaking, last_spoke
 
+    start_time = time.time()
     to_respond = dispatch(req.text, req.typed)
     if not to_respond:
         emit("speak_done", "")
@@ -322,18 +341,29 @@ def converse(req: ThinkRequest):
     for pname in to_respond:
         persona  = state.personas[pname]
         voice    = state.voices.get(persona.voice, state.voices["default"])
+        
+        # Time LLM inference
+        llm_start = time.time()
         response = llm(persona, req.text)
+        llm_duration = time.time() - llm_start
+        
         if response:
-            print(f"[{pname}] > {response}")
+            print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")
             emit_sal(pname, response)
             speaking = True
             try:
+                # Time speech synthesis
+                speak_start = time.time()
                 speak(response, voice.sample_file or "audio/bird-dream.wav")
+                speak_duration = time.time() - speak_start
+                print(f"Speech output triggered in {speak_duration:.2f}s")
             finally:
                 speaking   = False
                 last_spoke = time.time()
         responses.append(response)
 
+    total_duration = time.time() - start_time
+    print(f"Total converse cycle: {total_duration:.2f}s")
     emit("speak_done", "")
     return {"text": "\n".join(r for r in responses if r)}
 
