@@ -36,6 +36,7 @@ from persona_schemas import Persona, load, save
 PORT              = 8400
 LLM_URL           = "http://127.0.0.1:8401"
 SPEECH_OUTPUT_URL = "http://127.0.0.1:8402"
+SPEECH_INPUT_URL  = "http://127.0.0.1:8403"
 
 SPEAK_COOLDOWN = 8.0
 
@@ -306,6 +307,17 @@ def stop():
     httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0).raise_for_status()
     
     return {"ok": True}
+
+
+@app.post("/trigger_test")
+def trigger_test():
+    """Ask the speech input service to feed the test audio file."""
+    try:
+        r = httpx.post(f"{SPEECH_INPUT_URL}/test", timeout=10.0)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.post("/shutdown")

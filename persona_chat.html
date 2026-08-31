@@ -192,6 +192,26 @@
     align-items: center;
   }
 
+  .test-btn {
+    margin-left: auto;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    transition: all 0.2s ease;
+  }
+
+  .test-btn:hover {
+    border-color: var(--accent-sal);
+    color: var(--accent-sal);
+  }
+
   .state-label {
     font-size: 10px;
     letter-spacing: 0.12em;
@@ -232,6 +252,7 @@
     <span id="state-transcribing" class="state-label">transcribing</span>
     <span id="state-inference"    class="state-label">inference</span>
     <span id="state-speaking"     class="state-label">speaking</span>
+    <button id="test-btn" class="test-btn">Test</button>
   </div>
 
 </div>
@@ -239,6 +260,7 @@
   const input   = document.getElementById('text-input');
   const conv    = document.getElementById('conversation');
   const preview = document.getElementById('stt-preview');
+  const testBtn = document.getElementById('test-btn');
   const typedPending = new Set();
 
   const stateEls = {
@@ -346,6 +368,13 @@
     };
   }
   connectSSE();
+
+  testBtn.addEventListener('click', () => {
+    fetch('/trigger_test', {method: 'POST'})
+      .then(r => r.json())
+      .then(data => console.log('Test trigger:', data))
+      .catch(e => console.error('Test trigger error:', e));
+  });
 
   window.addEventListener('unload', () => {
     navigator.sendBeacon('/shutdown');
