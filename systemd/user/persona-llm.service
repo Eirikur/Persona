@@ -1,0 +1,15 @@
+[Unit]
+Description=Persona LLM Service
+After=network.target
+PartOf=persona.target
+
+[Service]
+SuccessExitStatus=143
+ExecStart=/home/eh/Proj/Persona/persona_llm.py
+WorkingDirectory=/home/eh/Proj/Persona
+Restart=always
+StandardOutput=append:/home/eh/Proj/Persona/logs/llm.log
+StandardError=append:/home/eh/Proj/Persona/logs/llm.log
+
+[Install]
+WantedBy=default.target

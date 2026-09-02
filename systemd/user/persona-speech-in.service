@@ -1,0 +1,15 @@
+[Unit]
+Description=Persona Speech Input Service
+After=persona-speech-out.service network.target
+PartOf=persona.target
+
+[Service]
+SuccessExitStatus=143
+ExecStart=/home/eh/Proj/Persona/persona_speech_input.py
+WorkingDirectory=/home/eh/Proj/Persona
+Restart=always
+StandardOutput=append:/home/eh/Proj/Persona/logs/speech-in.log
+StandardError=append:/home/eh/Proj/Persona/logs/speech-in.log
+
+[Install]
+WantedBy=default.target

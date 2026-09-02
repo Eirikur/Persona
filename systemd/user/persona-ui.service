@@ -1,0 +1,16 @@
+[Unit]
+Description=Persona Chat UI
+After=persona-hub.service network.target
+PartOf=persona.target
+
+[Service]
+Type=simple
+SuccessExitStatus=143
+Environment=DISPLAY=:0
+ExecStart=/home/eh/Proj/Persona/persona_ui_launcher.sh
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

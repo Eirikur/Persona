@@ -7,6 +7,18 @@ persona_hub.py imports from here; this file has no logic of its own
 beyond reading and writing state.
 """
 
+### We need more classes here. Classes? I guess that's the Pythonic way.
+# System, a persona, nickname Cissy. System can act as the User/Owner. "Cissy, create a new user named Bob."
+# Provider Class, holds the details for about a provider. Perhaps providers can  be
+# a simple list of dicts without needing class instances. See  ~/.pi/agent/models.json (it should be called providers!) Pi's models JSON database is here:
+# is here: ~/.pi/agent/models-store.json All those keys would be useful. I want the 
+
+# When a Persona closes or is closed, the Persona framework receives a session_result dictionary or object, which holds
+# start, duration, (the token counts for each type of token use), etc. Anything we can know about the session.
+
+
+
+
 import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path

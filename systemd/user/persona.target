@@ -1,0 +1,6 @@
+[Unit]
+Description=Persona Assistant Target
+Wants=persona-hub.service persona-llm.service persona-speech-out.service persona-speech-in.service persona-ui.service
+
+[Install]
+WantedBy=default.target

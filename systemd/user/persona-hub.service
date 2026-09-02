@@ -1,0 +1,15 @@
+[Unit]
+Description=Persona Hub Service
+After=persona-llm.service network.target
+PartOf=persona.target
+
+[Service]
+SuccessExitStatus=143
+ExecStart=/home/eh/Proj/Persona/persona_hub.py
+WorkingDirectory=/home/eh/Proj/Persona
+Restart=always
+StandardOutput=append:/home/eh/Proj/Persona/logs/hub.log
+StandardError=append:/home/eh/Proj/Persona/logs/hub.log
+
+[Install]
+WantedBy=default.target
