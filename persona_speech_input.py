@@ -123,8 +123,16 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
 
     print("Entering STT transcription loop...")
     try:
-        # Using the callback method as it's generally more stable in RealtimeSTT
-        rec.text(on_text)
+        # rec.text() blocks for exactly one utterance and returns -- it is
+        # not itself a loop. TEST_MODE feeds one fixed clip, so one call is
+        # correct there. Live listening needs to keep calling it forever,
+        # once per utterance, or the recorder goes silent after the first
+        # thing anyone says.
+        if TEST_MODE:
+            rec.text(on_text)
+        else:
+            while True:
+                rec.text(on_text)
     except Exception as e:
         print(f"Error in STT loop: {e}")
 
