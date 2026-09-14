@@ -23,7 +23,7 @@ PORT = 8401
 _PROVIDERS = {
     "ollama":     ("http://localhost:11434/v1",  None,               "gemma3:12b"),
     "openai":     (None,                         "OPENAI_API_KEY",   "gpt-4o-mini"),
-    "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "gemma-4-31b"),
+    "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "qwen-3.8-27b"),
     "perplexity": ("https://api.perplexity.ai",  "PPLX_API_KEY",     "sonar"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "google/gemini-2.0-flash-001"),
 }
