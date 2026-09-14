@@ -263,6 +263,18 @@ class ThinkRequest(BaseModel):
     typed: bool = False   # True = from chat box, skips wake-word gate + cooldown
 
 
+@app.get("/state")
+def get_state():
+    """Report current mode and the active persona's provider/model, for the settings UI."""
+    persona = state.personas[state.active_persona]
+    return {
+        "mode":     MODE,
+        "persona":  state.active_persona,
+        "provider": persona.provider,
+        "model":    persona.model,
+    }
+
+
 @app.post("/think")
 def think(req: ThinkRequest):
     """Send text directly to the active persona's LLM. No dispatch, no speech."""

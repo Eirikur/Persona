@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sal</title>
+<title>Persona Chat</title>
 <style>
   @font-face {
     font-family: 'Alegreya';
@@ -229,30 +229,155 @@
     margin-right: 5px;
     color: var(--accent-sal);
   }
+
+  /* ── tab bar ── */
+  #tabbar {
+    display: flex;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 10px 4px;
+    margin-right: 20px;
+    cursor: pointer;
+  }
+
+  .tab:hover  { color: var(--text-user); }
+  .tab.active { color: var(--accent-sal); border-bottom-color: var(--accent-sal); }
+
+  /* dot shown on a non-active tab that has new data waiting */
+  .tab.has-update::after {
+    content: '·';
+    color: var(--accent-sal);
+    margin-left: 5px;
+  }
+
+  /* ── panels (chat / logs / settings) ── */
+  .panel {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .panel.active { display: flex; }
+
+  #panel-logs {
+    padding: 16px 24px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+  }
+
+  #panel-settings {
+    padding: 22px 24px;
+    gap: 18px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .setting-row label {
+    width: 70px;
+    flex-shrink: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  .setting-row select,
+  .setting-row input[type="text"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-user);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    outline: none;
+  }
 </style>
 </head>
 <body>
 <div id="app">
 
   <div id="header">
-    <span class="name">Salice</span>
-    <span class="subtitle">personal assistant</span>
+    <span class="name">Persona Chat</span>
+    <span class="subtitle">talking with Salice</span>
   </div>
 
-  <div id="conversation"></div>
-
-  <div id="stt-preview"></div>
-
-  <div id="transcription">
-    <input id="text-input" type="text" placeholder="type here" autocomplete="off" spellcheck="false">
+  <div id="tabbar">
+    <button class="tab active" data-tab="chat">Chat</button>
+    <button class="tab" data-tab="logs">Logs</button>
+    <button class="tab" data-tab="settings">Settings</button>
   </div>
 
-  <div id="state-strip">
-    <span id="state-listening"    class="state-label">listening</span>
-    <span id="state-transcribing" class="state-label">transcribing</span>
-    <span id="state-inference"    class="state-label">inference</span>
-    <span id="state-speaking"     class="state-label">speaking</span>
-    <button id="test-btn" class="test-btn">Test</button>
+  <div id="panel-chat" class="panel active">
+
+    <div id="conversation"></div>
+
+    <div id="stt-preview"></div>
+
+    <div id="transcription">
+      <input id="text-input" type="text" placeholder="type here" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div id="state-strip">
+      <span id="state-listening"    class="state-label">listening</span>
+      <span id="state-transcribing" class="state-label">transcribing</span>
+      <span id="state-inference"    class="state-label">inference</span>
+      <span id="state-speaking"     class="state-label">speaking</span>
+      <button id="test-btn" class="test-btn">Test</button>
+    </div>
+
+  </div>
+
+  <div id="panel-logs" class="panel">
+  </div>
+
+  <div id="panel-settings" class="panel">
+
+    <div class="setting-row">
+      <label for="setting-mode">mode</label>
+      <select id="setting-mode">
+        <option value="named">named (wake word required)</option>
+        <option value="open">open (always listening)</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <label for="setting-provider">provider</label>
+      <select id="setting-provider">
+        <option value="ollama">ollama</option>
+        <option value="openai">openai</option>
+        <option value="cerebras">cerebras</option>
+        <option value="perplexity">perplexity</option>
+        <option value="openrouter">openrouter</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <label for="setting-model">model</label>
+      <input id="setting-model" type="text" placeholder="default for provider">
+      <button id="setting-model-apply" class="test-btn">Apply</button>
+    </div>
+
   </div>
 
 </div>
@@ -331,6 +456,74 @@
     });
   });
 
+  // ── tab switching ──
+  const tabs    = document.querySelectorAll('.tab');
+  const tabByName = {};
+  tabs.forEach(t => { tabByName[t.dataset.tab] = t; });
+
+  const panels = {
+    chat:     document.getElementById('panel-chat'),
+    logs:     document.getElementById('panel-logs'),
+    settings: document.getElementById('panel-settings'),
+  };
+
+  function activeTabName() {
+    return document.querySelector('.tab.active')?.dataset.tab;
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      tab.classList.remove('has-update');
+      for (const [name, panel] of Object.entries(panels)) {
+        panel.classList.toggle('active', name === tab.dataset.tab);
+      }
+      if (tab.dataset.tab === 'settings') loadSettings();
+    });
+  });
+
+  // ── logs panel: every SSE event, shown as a plain scrolling list ──
+  const logPanel     = document.getElementById('panel-logs');
+  const logLines      = [];
+  const MAX_LOG_LINES = 200;
+
+  function addLogLine(type, detail) {
+    const time = new Date().toLocaleTimeString();
+    logLines.push(`${time}  ${type}${detail ? '  ' + detail : ''}`);
+    if (logLines.length > MAX_LOG_LINES) logLines.shift();
+    logPanel.textContent = logLines.join('\n');
+    logPanel.scrollTop = logPanel.scrollHeight;
+    if (activeTabName() !== 'logs') tabByName.logs.classList.add('has-update');
+  }
+
+  // ── settings panel ──
+  const modeSelect     = document.getElementById('setting-mode');
+  const providerSelect = document.getElementById('setting-provider');
+  const modelInput     = document.getElementById('setting-model');
+  const modelApplyBtn  = document.getElementById('setting-model-apply');
+
+  function loadSettings() {
+    fetch('/state')
+      .then(r => r.json())
+      .then(s => {
+        modeSelect.value     = s.mode;
+        providerSelect.value = s.provider;
+        modelInput.value     = s.model || '';
+      });
+  }
+
+  modeSelect.addEventListener('change', () => {
+    fetch(`/mode/${modeSelect.value}`, {method: 'POST'});
+  });
+
+  providerSelect.addEventListener('change', () => {
+    fetch(`/provider/${providerSelect.value}`, {method: 'POST'});
+  });
+
+  modelApplyBtn.addEventListener('click', () => {
+    fetch(`/model/${encodeURIComponent(modelInput.value)}`, {method: 'POST'});
+  });
+
   function connectSSE() {
     const es = new EventSource('/events');
 
@@ -342,6 +535,7 @@
       const data = JSON.parse(e.data);
       console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
       const {type, text, persona} = data;
+      addLogLine(type, text || persona || '');
       if (type === 'heard') {
         preview.textContent = text;
         preview.classList.remove('corrected');
