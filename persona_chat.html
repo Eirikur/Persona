@@ -60,7 +60,7 @@
 
   /* ── header ── */
   #header {
-    padding: 18px 24px 14px;
+    padding: 8px 24px 6px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: baseline;
@@ -188,6 +188,8 @@
   #state-strip {
     padding: 10px 24px 14px;
     display: flex;
+    flex-wrap: wrap;
+    row-gap: 6px;
     gap: 16px;
     align-items: center;
   }
@@ -228,6 +230,16 @@
     content: '·';
     margin-right: 5px;
     color: var(--accent-sal);
+  }
+
+  /* clicking HEARING mutes voice input; strike-through leaves the label's
+     existing color alone so muted state reads as "off" without a new hue */
+  #state-hearing {
+    cursor: pointer;
+  }
+
+  .state-label.muted {
+    text-decoration: line-through;
   }
 
   /* ── tab bar ── */
@@ -418,6 +430,17 @@
     speaking:     document.getElementById('state-speaking'),
   };
 
+  // HEARING is a placeholder mic-activity label (not part of the exclusive
+  // pipeline states above), so it doubles as the mute toggle: click it to
+  // stop the hub from acting on voice input during smoke tests.
+  const hearingEl = document.getElementById('state-hearing');
+
+  hearingEl.addEventListener('click', () => {
+    const muted = !hearingEl.classList.contains('muted');
+    hearingEl.classList.toggle('muted', muted);
+    fetch(`/mute/${muted ? 'on' : 'off'}`, {method: 'POST'});
+  });
+
   let currentState = null;
   let minEndTime = 0;
   let statePromise = Promise.resolve();
@@ -575,6 +598,7 @@
           el.textContent = personaDisplayName(name);
           rosterEl.appendChild(el);
         }
+        hearingEl.classList.toggle('muted', !!s.muted);
       });
   }
   loadRoster();
