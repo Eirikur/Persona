@@ -265,13 +265,14 @@ class ThinkRequest(BaseModel):
 
 @app.get("/state")
 def get_state():
-    """Report current mode and the active persona's provider/model, for the settings UI."""
+    """Report current mode, the loaded roster, and the active persona's provider/model."""
     persona = state.personas[state.active_persona]
     return {
-        "mode":     MODE,
-        "persona":  state.active_persona,
-        "provider": persona.provider,
-        "model":    persona.model,
+        "mode":             MODE,
+        "persona":          state.active_persona,
+        "provider":         persona.provider,
+        "model":            persona.model,
+        "loaded_personas":  state.loaded_personas,
     }
 
 

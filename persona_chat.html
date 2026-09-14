@@ -239,7 +239,7 @@
 
   .tab {
     font-family: var(--font-ui);
-    font-size: 11px;
+    font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     background: transparent;
@@ -260,6 +260,24 @@
     color: var(--accent-sal);
     margin-left: 5px;
   }
+
+  /* ── roster: who's present, shown under the tab bar on every tab ── */
+  #roster {
+    padding: 8px 24px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .roster-name {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .roster-name.system { color: var(--text-muted); }
 
   /* ── panels (chat / logs / settings) ── */
   .panel {
@@ -318,14 +336,18 @@
 <div id="app">
 
   <div id="header">
-    <span class="name">Persona Chat</span>
-    <span class="subtitle">talking with Salice</span>
+    <span class="name">Persona</span>
+    <span class="subtitle">AI Habitat</span>
   </div>
 
   <div id="tabbar">
     <button class="tab active" data-tab="chat">Chat</button>
     <button class="tab" data-tab="logs">Logs</button>
     <button class="tab" data-tab="settings">Settings</button>
+  </div>
+
+  <div id="roster">
+    <span class="roster-name system">system</span>
   </div>
 
   <div id="panel-chat" class="panel active">
@@ -443,6 +465,12 @@
     conv.scrollTop = conv.scrollHeight;
   }
 
+  // Persona keys are internal ("default"); this is the one place that
+  // maps a key to what the user should actually see.
+  function personaDisplayName(name) {
+    return (!name || name === 'default') ? 'Sal' : name;
+  }
+
   input.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     const text = input.value.trim();
@@ -468,6 +496,14 @@
     settings: document.getElementById('panel-settings'),
   };
 
+  // The OS/taskbar window title tracks whichever tab is showing, so the
+  // window is identifiable from outside the app (alt-tab, taskbar).
+  const TAB_TITLES = {
+    chat:     'Persona Chat',
+    logs:     'Persona Logs',
+    settings: 'Persona Settings',
+  };
+
   function activeTabName() {
     return document.querySelector('.tab.active')?.dataset.tab;
   }
@@ -479,6 +515,7 @@
       for (const [name, panel] of Object.entries(panels)) {
         panel.classList.toggle('active', name === tab.dataset.tab);
       }
+      document.title = TAB_TITLES[tab.dataset.tab];
       if (tab.dataset.tab === 'settings') loadSettings();
     });
   });
@@ -525,6 +562,23 @@
     fetch(`/model/${encodeURIComponent(modelInput.value)}`, {method: 'POST'});
   });
 
+  // ── roster: who's present, fetched once at load ──
+  const rosterEl = document.getElementById('roster');
+
+  function loadRoster() {
+    fetch('/state')
+      .then(r => r.json())
+      .then(s => {
+        for (const name of s.loaded_personas || []) {
+          const el = document.createElement('span');
+          el.className = 'roster-name';
+          el.textContent = personaDisplayName(name);
+          rosterEl.appendChild(el);
+        }
+      });
+  }
+  loadRoster();
+
   function connectSSE() {
     const es = new EventSource('/events');
 
@@ -555,8 +609,7 @@
         }
       } else if (type === 'sal_turn') {
         setLive('speaking');
-        const name = (!persona || persona === 'default') ? 'Sal' : persona;
-        addBubble('sal', name, text);
+        addBubble('sal', personaDisplayName(persona), text);
       } else if (type === 'speak_done') {
         setLive('listening');
       }
