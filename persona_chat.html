@@ -188,7 +188,7 @@
   #state-strip {
     padding: 10px 24px 14px;
     display: flex;
-    gap: 22px;
+    gap: 16px;
     align-items: center;
   }
 
@@ -213,8 +213,8 @@
   }
 
   .state-label {
-    font-size: 10px;
-    letter-spacing: 0.12em;
+    font-size: 9px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-dim);
     transition: color 0.3s ease;
@@ -339,6 +339,7 @@
     </div>
 
     <div id="state-strip">
+      <span id="state-hearing"      class="state-label">hearing</span>
       <span id="state-listening"    class="state-label">listening</span>
       <span id="state-transcribing" class="state-label">transcribing</span>
       <span id="state-inference"    class="state-label">inference</span>
