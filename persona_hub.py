@@ -19,6 +19,7 @@ import asyncio
 import json
 import re
 import subprocess
+import threading
 import time
 import uvicorn
 import httpx
@@ -38,7 +39,8 @@ LLM_URL           = "http://127.0.0.1:8401"
 SPEECH_OUTPUT_URL = "http://127.0.0.1:8402"
 SPEECH_INPUT_URL  = "http://127.0.0.1:8403"
 
-SPEAK_COOLDOWN = 8.0
+SPEAK_COOLDOWN  = 8.0
+SHUTDOWN_GRACE  = 2.0   # seconds to wait for a reload's SSE reconnect before really shutting down
 
 
 # ─── Dispatch Tables ──────────────────────────────────────────────────────────
@@ -76,10 +78,12 @@ BROADCAST_PHRASES = (
 
 # ─── Runtime State ────────────────────────────────────────────────────────────
 
-state      = load()
-speaking   = False
-last_spoke = 0.0
-MODE       = "named"   # "named" = wake-word required, "open" = always listening
+state          = load()
+speaking       = False
+last_spoke     = 0.0
+MODE           = "named"   # "named" = wake-word required, "open" = always listening
+MUTED          = False     # True = ignore voice input; typed input still goes through
+shutdown_timer = None      # pending threading.Timer, or None if no shutdown is queued
 
 
 # ─── FastAPI App & SSE Event Bus ──────────────────────────────────────────────
@@ -135,7 +139,20 @@ def emit_sal(persona_name: str, text: str) -> None:
 
 @app.get("/events")
 async def events():
-    """SSE endpoint — clients connect here to receive real-time chat events."""
+    """
+    SSE endpoint — clients connect here to receive real-time chat events.
+
+    A reload tears the page down and reconnects here within a fraction of a
+    second, so a fresh connection cancels any shutdown that reload's unload
+    handler just queued. Only a real window close, with no reconnect, lets
+    that shutdown actually run.
+    """
+    global shutdown_timer
+    if shutdown_timer is not None:
+        print("reconnect seen -- cancelling queued shutdown")
+        shutdown_timer.cancel()
+        shutdown_timer = None
+
     q: asyncio.Queue = asyncio.Queue()
     event_queues.append(q)
 
@@ -269,6 +286,7 @@ def get_state():
     persona = state.personas[state.active_persona]
     return {
         "mode":             MODE,
+        "muted":            MUTED,
         "persona":          state.active_persona,
         "provider":         persona.provider,
         "model":            persona.model,
@@ -292,6 +310,21 @@ def set_mode(mode: str):
     MODE = mode
     print(f"mode → {mode}")
     return {"mode": MODE}
+
+
+@app.post("/mute/{setting}")
+def set_mute(setting: str):
+    """
+    Mute or unmute voice input. Muted voice input is ignored before it
+    reaches dispatch, so it never triggers an LLM response or speech.
+    Typed input (the chat box, the Test button) always goes through.
+    """
+    global MUTED
+    if setting not in {"on", "off"}:
+        return {"error": f"unknown mute setting {setting!r}"}
+    MUTED = (setting == "on")
+    print(f"muted → {MUTED}")
+    return {"muted": MUTED}
 
 
 @app.post("/model/{model}")
@@ -333,12 +366,24 @@ def trigger_test():
         return {"error": str(e)}
 
 
+def run_shutdown():
+    """Actually stop every Persona service. Runs once the grace period elapses."""
+    print(f"no reconnect within {SHUTDOWN_GRACE}s -- shutting down")
+    subprocess.Popen(["/bin/bash", "./persona_shutdown.sh"])
+
+
 @app.post("/shutdown")
 def shutdown():
-    """Shut down the entire Persona system by executing the shutdown script."""
-    print("shutdown request received")
-    # We use Popen so the server can return a response before it's killed
-    subprocess.Popen(["/bin/bash", "./persona_shutdown.sh"])
+    """
+    Queue a shutdown after SHUTDOWN_GRACE seconds. The chat window's unload
+    handler calls this on both a page reload and a real window close -- a
+    reload reconnects to /events almost immediately and cancels this timer,
+    so only a real close (no reconnect) ends up stopping the services.
+    """
+    global shutdown_timer
+    print(f"shutdown requested, waiting {SHUTDOWN_GRACE}s for a reload to cancel it")
+    shutdown_timer = threading.Timer(SHUTDOWN_GRACE, run_shutdown)
+    shutdown_timer.start()
     return {"ok": True}
 
 
@@ -349,6 +394,9 @@ def converse(req: ThinkRequest):
     personas, runs LLM inference, and speaks each response in turn.
     """
     global speaking, last_spoke
+
+    if MUTED and not req.typed:
+        return {"text": ""}
 
     start_time = time.time()
     to_respond = dispatch(req.text, req.typed)
