@@ -1,6 +1,8 @@
 #!/usr/bin/env -S uv run --script
+"""requires-python = ">=3.11"
+   Now pinned to 3.12.x because RealtimeSTT doesn't support 3.13 yet."""
 # /// script
-# requires-python = ">=3.11"
+# requires-python = "~=3.12"
 # dependencies = [
 #    "fastapi",
 #    "uvicorn",
