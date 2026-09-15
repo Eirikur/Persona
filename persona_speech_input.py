@@ -41,6 +41,8 @@ from fastapi import FastAPI
 torch.backends.nnpack.enabled = False  # silence unsupported-hardware NNPACK warnings
 from RealtimeSTT import AudioToTextRecorder
 
+from persona_mic_indicator import run_mic_indicator
+
 # ─── Runtime State ───────────────────────────────────────────────────────────
 
 recorder_instance = None
@@ -145,6 +147,13 @@ async def lifespan(app: FastAPI):
         daemon=True,
     )
     t.start()
+
+    threading.Thread(
+        target=run_mic_indicator,
+        args=(HUB_URL,),
+        daemon=True,
+    ).start()
+
     yield
 
 

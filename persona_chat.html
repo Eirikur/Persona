@@ -236,6 +236,8 @@
      existing color alone so muted state reads as "off" without a new hue */
   #state-hearing {
     cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 100ms linear;
   }
 
   .state-label.muted {
@@ -635,8 +637,16 @@
 
     es.onmessage = e => {
       const data = JSON.parse(e.data);
+      const {type, text, persona, level} = data;
+
+      // Fires ~10x/second while the mic is open -- handled separately so it
+      // doesn't flood the log panel or the console.
+      if (type === 'mic_level') {
+        hearingEl.style.opacity = (0.3 + 0.7 * level).toFixed(2);
+        return;
+      }
+
       console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
-      const {type, text, persona} = data;
       addLogLine(type, text || persona || '');
       if (type === 'heard') {
         preview.textContent = text;

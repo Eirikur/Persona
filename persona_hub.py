@@ -137,6 +137,15 @@ def emit_sal(persona_name: str, text: str) -> None:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
 
 
+def emit_mic_level(level: float) -> None:
+    """Push a raw microphone brightness reading (0..1) to all connected SSE clients."""
+    if not event_loop:
+        return
+    data = json.dumps({"type": "mic_level", "level": level})
+    for q in event_queues:
+        asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
+
+
 @app.get("/events")
 async def events():
     """
@@ -325,6 +334,14 @@ def set_mute(setting: str):
     MUTED = (setting == "on")
     print(f"muted → {MUTED}")
     return {"muted": MUTED}
+
+
+@app.post("/mic_level/{value}")
+def mic_level(value: float):
+    """Relay a raw microphone brightness reading (0..1) from the speech-input
+    service to the chat UI, where it drives the HEARING label's flicker."""
+    emit_mic_level(value)
+    return {"ok": True}
 
 
 @app.post("/model/{model}")
