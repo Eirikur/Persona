@@ -1,0 +1,74 @@
+INFO:     Started server process [26840]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8401 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60242 - "POST /v1/chat/completions HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/routing.py", line 1281, in handle
+    await super().handle(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/routing.py", line 280, in handle
+    await self.app(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/fastapi/routing.py", line 352, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/eh/Proj/Persona/persona_llm.py", line 49, in chat
+    response = await client.chat.completions.create(model=model, messages=messages)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/openai/resources/chat/completions/completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<55 lines>...
+    )
+    ^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/openai/_base_client.py", line 1995, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/eh/.cache/uv/environments-v2/persona-llm-f7638a5a0da76572/lib/python3.13/site-packages/openai/_base_client.py", line 1780, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'message': 'Wrong API Key', 'type': 'invalid_request_error', 'param': 'api_key', 'code': 'wrong_api_key'}

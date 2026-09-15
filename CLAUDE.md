@@ -42,6 +42,9 @@ making important changes, help re-establish solid ground.
 - Test one service directly before testing the full Persona stack.
 - Commit each known-good step before starting the next risky change.
 - Prefer explicit handoff notes over relying on memory.
+- `notes/` holds dated, structured handoff notes (`YYYY-MM-DD-topic.md`);
+  `notes/journal/` holds raw, undated thought-history — obsolete once written,
+  kept for reference rather than acted on.
 
 ## Code style — read this before writing any code
 

@@ -1,0 +1,17 @@
+We need a System persona who 
+
+There needs to be some kind of test flag or a parameter that is added to the Fastapi calls.
+When TEST is True, persona_speech_input reads from a specific test audio file.
+
+I envision a test subdirectory. It initially contains a short audio
+(.wav) file in the mono, and  sample-rate that RealtimeSTT prefers.
+When TEST is true, persona_speech input reads the file, but then acts as
+though the audio had been recorded from the microphone.
+
+The audio contains only a single simple test sentence such as "Please state the date and time."
+
+persona_speech_input acts as it normally does and the text is sent to persona_llm.
+Persona_llm doesn't know or care that this is a test.
+
+The LLM then responds with text  back to the hub. The hub sends the text to persona_speech_output as normal.
+In test mode persona_speach_output directs the 

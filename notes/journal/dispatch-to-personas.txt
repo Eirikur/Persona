@@ -1,0 +1,9 @@
+29 August 2026:
+
+I think that named-mode isn't global, it's local to each persona.
+
+New mode: listening. When listening, a persona receives all messages, but does not respond.
+The purpose of this mode is so that the model knows what has been said.
+
+When a persona is listening, it receives all messages, but
+the text is wrapped in an instruction "You hear Alice say 'This is a test', but you do not respond."

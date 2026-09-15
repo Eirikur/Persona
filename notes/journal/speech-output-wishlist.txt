@@ -1,0 +1,4 @@
+Chatterbox is very slow. It's faster on NVIDIA but that limits deployment.
+So, I want to try the lastest and greatest voice-cloning TTS models.
+The Salice voice was a happy accident that caused me to start the Persona project.
+I've not heard another TTS that could use the Salice data as well as Chatterbox.
