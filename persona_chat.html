@@ -648,8 +648,12 @@
       .catch(e => console.error('Test trigger error:', e));
   });
 
+  // A throwaway tool (persona_screenshot.sh) loads this same page with
+  // ?no_shutdown=1 so that closing its tab can't take down the real hub.
+  const skipShutdown = new URLSearchParams(location.search).has('no_shutdown');
+
   window.addEventListener('unload', () => {
-    navigator.sendBeacon('/shutdown');
+    if (!skipShutdown) navigator.sendBeacon('/shutdown');
   });
 </script>
 </body>

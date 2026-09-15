@@ -20,6 +20,10 @@ Shared dataclasses and state live in `persona_schemas.py`
 Run: `./persona_start.sh [--no-voice] [--no-attach]` — tmux session "persona".
 `--no-voice` skips the speech services; use it when verifying hub changes.
 
+Screenshot the chat UI: `./persona_screenshot.sh [output.png]` — headless
+Chromium against its own throwaway profile, same URL and window size as the
+live window. Does not touch the live window, so it's safe to run any time.
+
 ## Hardware — AMD, not NVIDIA
 
 This runs on a Strix Halo box (Radeon 8060S, gfx1151) with ROCm 7.2.2
