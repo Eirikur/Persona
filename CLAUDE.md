@@ -24,6 +24,10 @@ Screenshot the chat UI: `./persona_screenshot.sh [output.png]` — headless
 Chromium against its own throwaway profile, same URL and window size as the
 live window. Does not touch the live window, so it's safe to run any time.
 
+One-time system setup: `./persona_install.sh` — udev rules, group
+membership, and anything else a plain `uv run` can't handle on its own.
+Safe to re-run; each step checks whether it's already done first.
+
 ## Hardware — AMD, not NVIDIA
 
 This runs on a Strix Halo box (Radeon 8060S, gfx1151) with ROCm 7.2.2
