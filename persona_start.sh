@@ -26,9 +26,11 @@ systemctl --user restart persona-hub.service
 if [ "$NO_VOICE" -eq 0 ]; then
     systemctl --user restart persona-speech-out.service
     systemctl --user restart persona-speech-in.service
+    systemctl --user restart persona-led-ring.service
 else
     systemctl --user stop persona-speech-out.service
     systemctl --user stop persona-speech-in.service
+    systemctl --user stop persona-led-ring.service
 fi
 
 # Open chat window via systemd

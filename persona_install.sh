@@ -25,4 +25,50 @@ if ! groups "$USER" | grep -qw plugdev; then
     echo "Run: sudo usermod -aG plugdev $USER   (then log out and back in)"
 fi
 
+# ─── ReSpeaker LED ring: systemd unit ─────────────────────────────────────────
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+LED_RING_UNIT="$HOME/.config/systemd/user/persona-led-ring.service"
+LED_RING_UNIT_WANT="persona-led-ring.service"
+
+chmod +x "$DIR/persona_led_ring.py"
+
+NEEDS_RELOAD=0
+
+DESIRED_UNIT="[Unit]
+Description=Persona LED Ring Service
+After=persona-hub.service network.target
+PartOf=persona.target
+
+[Service]
+SuccessExitStatus=143
+ExecStart=$DIR/persona_led_ring.py
+WorkingDirectory=$DIR
+Restart=always
+StandardOutput=append:$DIR/logs/led-ring.log
+StandardError=append:$DIR/logs/led-ring.log
+
+[Install]
+WantedBy=default.target"
+
+if [ "$(cat "$LED_RING_UNIT" 2>/dev/null)" = "$DESIRED_UNIT" ]; then
+    echo "LED ring systemd unit already installed."
+else
+    echo "Installing LED ring systemd unit..."
+    mkdir -p "$(dirname "$LED_RING_UNIT")"
+    echo "$DESIRED_UNIT" > "$LED_RING_UNIT"
+    NEEDS_RELOAD=1
+fi
+
+PERSONA_TARGET="$HOME/.config/systemd/user/persona.target"
+if [ -f "$PERSONA_TARGET" ] && ! grep -q "$LED_RING_UNIT_WANT" "$PERSONA_TARGET"; then
+    echo "Adding LED ring to persona.target..."
+    sed -i "s/^Wants=.*/& $LED_RING_UNIT_WANT/" "$PERSONA_TARGET"
+    NEEDS_RELOAD=1
+fi
+
+if [ "$NEEDS_RELOAD" -eq 1 ]; then
+    systemctl --user daemon-reload
+fi
+
 echo "Done."
