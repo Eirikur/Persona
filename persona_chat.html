@@ -316,6 +316,22 @@
     gap: 18px;
   }
 
+  /* ── test panel ── */
+  #panel-test {
+    padding: 22px 24px;
+    gap: 14px;
+  }
+
+  #panel-test .test-description {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  #panel-test .test-btn {
+    margin-left: 0;
+    align-self: flex-start;
+  }
+
   .setting-row {
     display: flex;
     align-items: center;
@@ -356,6 +372,7 @@
     <button class="tab active" data-tab="chat">Chat</button>
     <button class="tab" data-tab="logs">Logs</button>
     <button class="tab" data-tab="settings">Settings</button>
+    <button class="tab" data-tab="test">Test</button>
   </div>
 
   <div id="roster">
@@ -378,12 +395,16 @@
       <span id="state-transcribing" class="state-label">transcribing</span>
       <span id="state-inference"    class="state-label">inference</span>
       <span id="state-speaking"     class="state-label">speaking</span>
-      <button id="test-btn" class="test-btn">Test</button>
     </div>
 
   </div>
 
   <div id="panel-logs" class="panel">
+  </div>
+
+  <div id="panel-test" class="panel">
+    <p class="test-description">Fires a canned test message through the pipeline, the same as a real utterance.</p>
+    <button id="test-btn" class="test-btn">Run test</button>
   </div>
 
   <div id="panel-settings" class="panel">
@@ -516,6 +537,7 @@
   const panels = {
     chat:     document.getElementById('panel-chat'),
     logs:     document.getElementById('panel-logs'),
+    test:     document.getElementById('panel-test'),
     settings: document.getElementById('panel-settings'),
   };
 
@@ -524,6 +546,7 @@
   const TAB_TITLES = {
     chat:     'Persona Chat',
     logs:     'Persona Logs',
+    test:     'Persona Test',
     settings: 'Persona Settings',
   };
 
