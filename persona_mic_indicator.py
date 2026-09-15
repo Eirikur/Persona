@@ -25,12 +25,12 @@ EPSILON = 1e-12
 
 @dataclass
 class IndicatorConfig:
-    window_ms:        float = 100.0   # audio analysis window
+    window_ms:        float = 60.0    # audio analysis window
     threshold_db:     float = -48.0   # RMS at/below this stays dark
     dynamic_range_db: float = 28.0    # dB above threshold that reaches full brightness
     gamma:            float = 1.8     # >1 makes room noise less visible, speech still registers
     attack_ms:        float = 65.0    # fast rise so speech visibly registers
-    release_ms:       float = 450.0   # slow fall so it doesn't flicker between words
+    release_ms:       float = 250.0   # fall time after speech stops (was 450, felt sluggish)
     post_hz:          float = 10.0    # how often to post an update to the hub
 
 
