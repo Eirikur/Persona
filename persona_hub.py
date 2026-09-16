@@ -344,6 +344,23 @@ def mic_level(value: float):
     return {"ok": True}
 
 
+@app.post("/recording_start")
+def recording_start():
+    """Relay the STT recorder's VAD signal that real speech has begun, so the
+    LED ring can leave DOA hunting and show it's actively listening."""
+    emit("recording_start", "")
+    return {"ok": True}
+
+
+@app.post("/recording_stop")
+def recording_stop():
+    """Relay the matching VAD signal that speech has ended, whether or not a
+    transcript follows -- lets the LED ring fall back to DOA hunting even if
+    the speech didn't turn into a transcribed "heard" event."""
+    emit("recording_stop", "")
+    return {"ok": True}
+
+
 @app.post("/model/{model}")
 def set_model(model: str):
     """Update the model for the active persona."""

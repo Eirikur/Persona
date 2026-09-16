@@ -34,23 +34,39 @@ HUB_URL = "http://127.0.0.1:8400"
 # Effect codes, from xvf_host.py's PARAMETERS table:
 #   0=off  1=breath  2=rainbow  3=single color  4=doa  5=ring
 EFFECT_SINGLE = 3
+EFFECT_BREATH = 1
 EFFECT_DOA    = 4
 
-# One look per pipeline state -- a rough first pass, easy to retune later.
+# One look per pipeline state, colors and effects carried over from the
+# hand-tuned trials in p.sh. LISTENING and TRANSCRIBING are static solid
+# colors -- see BLINK_STATES below, which reissues them on mic activity.
+# RESTING isn't a pipeline stage, just "nothing worth naming is happening" --
+# it's what shows between turns, and again if a VAD-detected recording never
+# turns into a transcript.
 STATE_LOOKS = {
-    "listening":    {"effect": EFFECT_DOA},                       # idle: normal DOA tracking
-    "transcribing": {"effect": EFFECT_SINGLE, "color": 0x3050FF}, # blue
-    "inference":    {"effect": EFFECT_SINGLE, "color": 0xFFA000}, # amber
-    "speaking":     {"effect": EFFECT_SINGLE, "color": 0x30C060}, # green
+    "resting":      {"effect": EFFECT_DOA},                                     # idle: DOA hunting
+    "listening":    {"effect": EFFECT_SINGLE, "color": 0x880000},               # red, recording
+    "transcribing": {"effect": EFFECT_SINGLE, "color": 0x0000CD},               # blue
+    "inference":    {"effect": EFFECT_BREATH, "color": 0xFFFFFF, "speed": 3},   # white, breathing
+    "speaking":     {"effect": EFFECT_SINGLE, "color": 0x00AA00},               # green
 }
 
+# Static-color states that should blink -- reissue their own look's command --
+# each time a mic_level (HEARING) event comes in, so the ring visibly pulses
+# along with live mic activity the same way the chat UI's HEARING label does.
+BLINK_STATES = ("listening", "transcribing")
+
 # Mirrors persona_chat.html's setLive() event -> state mapping, so the LED
-# ring and the chat UI agree on what each SSE event means.
+# ring and the chat UI agree on what each SSE event means. recording_start/
+# recording_stop come straight from RealtimeSTT's VAD, via the hub -- see
+# persona_speech_input.py's on_recording_start/on_recording_stop callbacks.
 EVENT_TO_STATE = {
-    "heard":      "transcribing",
-    "user_turn":  "inference",
-    "sal_turn":   "speaking",
-    "speak_done": "listening",
+    "recording_start": "listening",
+    "recording_stop":  "resting",
+    "heard":           "transcribing",
+    "user_turn":       "inference",
+    "sal_turn":        "speaking",
+    "speak_done":      "resting",
 }
 
 
@@ -66,6 +82,14 @@ class LedRing:
     def show(self, look: dict) -> None:
         if look == self.current_look:
             return
+        self.apply(look)
+
+    def apply(self, look: dict) -> None:
+        """Write a look to the hardware unconditionally, even if it matches
+        what's already showing. Used for the mic-activity blink, where
+        reissuing the same solid color is what makes it visibly pulse."""
+        if "speed" in look:
+            self.dev.write("LED_SPEED", [look["speed"]])
         self.dev.write("LED_EFFECT", [look["effect"]])
         if "color" in look:
             self.dev.write("LED_COLOR", [look["color"]])
@@ -86,9 +110,10 @@ def connect(vid=0x2886, pid=0x001A):
 # ─── Event Loop ───────────────────────────────────────────────────────────────
 
 def run() -> None:
-    dev  = connect()
-    ring = LedRing(dev)
-    ring.show(STATE_LOOKS["listening"])
+    dev           = connect()
+    ring          = LedRing(dev)
+    current_state = "resting"
+    ring.show(STATE_LOOKS[current_state])
 
     while True:
         try:
@@ -96,10 +121,18 @@ def run() -> None:
                 for line in response.iter_lines():
                     if not line.startswith("data: "):
                         continue
-                    data  = json.loads(line[len("data: "):])
-                    state = EVENT_TO_STATE.get(data.get("type"))
+                    data      = json.loads(line[len("data: "):])
+                    event     = data.get("type")
+
+                    if event == "mic_level":
+                        if current_state in BLINK_STATES:
+                            ring.apply(STATE_LOOKS[current_state])
+                        continue
+
+                    state = EVENT_TO_STATE.get(event)
                     if state:
-                        ring.show(STATE_LOOKS[state])
+                        current_state = state
+                        ring.show(STATE_LOOKS[current_state])
         except Exception as e:
             print(f"Lost connection to hub ({e}) -- retrying in 3s")
             time.sleep(3)

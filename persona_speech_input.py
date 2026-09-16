@@ -52,6 +52,16 @@ force_typed = False
 PORT = 8403
 HUB_URL = "http://127.0.0.1:8400"
 
+# ─── STT Configuration ────────────────────────────────────────────────────────
+
+# Whisper model size for RealtimeSTT. "small.en" is fast and English-only;
+# "medium" is slower but noticeably more accurate. persona_schemas.py has an
+# InputProfile.stt_model field meant to hold this once the editable-preferences
+# system exists, but nothing wires it up to this service yet -- until then,
+# this constant is the one place to change it.
+STT_MODEL        = "medium"
+SILENCE_DURATION = 0.6
+
 # ─── Test Configuration ───────────────────────────────────────────────────────
 
 TEST_MODE = os.environ.get("PERSONA_TEST_MODE") == "1"
@@ -88,6 +98,18 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
         except Exception as e:
             print(f"Hub error: {e}")
 
+    def on_recording_start():
+        try:
+            httpx.post(f"{hub_url}/recording_start", timeout=1.0)
+        except Exception:
+            pass  # the hub being briefly unavailable shouldn't matter here
+
+    def on_recording_stop():
+        try:
+            httpx.post(f"{hub_url}/recording_stop", timeout=1.0)
+        except Exception:
+            pass  # the hub being briefly unavailable shouldn't matter here
+
     rec = AudioToTextRecorder(
         model=stt_model,
         device=device,
@@ -99,6 +121,8 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
         enable_realtime_transcription=True,
         use_microphone=not TEST_MODE,
         silero_sensitivity=0.1 if TEST_MODE else 0.4,
+        on_recording_start=on_recording_start,
+        on_recording_stop=on_recording_stop,
     )
     
     with recorder_lock:
@@ -143,7 +167,7 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
 async def lifespan(app: FastAPI):
     t = threading.Thread(
         target=_recorder_loop,
-        args=(HUB_URL, "small.en", 0.6),
+        args=(HUB_URL, STT_MODEL, SILENCE_DURATION),
         daemon=True,
     )
     t.start()
