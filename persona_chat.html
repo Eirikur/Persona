@@ -393,7 +393,6 @@
 
     <div id="state-strip">
       <span id="state-hearing"      class="state-label">hearing</span>
-      <span id="state-listening"    class="state-label">listening</span>
       <span id="state-transcribing" class="state-label">transcribing</span>
       <span id="state-inference"    class="state-label">inference</span>
       <span id="state-speaking"     class="state-label">speaking</span>
@@ -446,17 +445,17 @@
   const testBtn = document.getElementById('test-btn');
   const typedPending = new Set();
 
+  // HEARING is the pipeline's base/idle state (lit like the others below
+  // when nothing else is happening) and it also doubles as the mute toggle:
+  // click it to stop the hub from acting on voice input during smoke tests.
+  const hearingEl = document.getElementById('state-hearing');
+
   const stateEls = {
-    listening:    document.getElementById('state-listening'),
+    hearing:      hearingEl,
     transcribing: document.getElementById('state-transcribing'),
     inference:    document.getElementById('state-inference'),
     speaking:     document.getElementById('state-speaking'),
   };
-
-  // HEARING is a placeholder mic-activity label (not part of the exclusive
-  // pipeline states above), so it doubles as the mute toggle: click it to
-  // stop the hub from acting on voice input during smoke tests.
-  const hearingEl = document.getElementById('state-hearing');
 
   hearingEl.addEventListener('click', () => {
     const muted = !hearingEl.classList.contains('muted');
@@ -631,7 +630,7 @@
   function connectSSE() {
     const es = new EventSource('/events');
 
-    es.onopen = () => setLive('listening');
+    es.onopen = () => setLive('hearing');
 
     es.onerror = () => setLive(null);
 
@@ -670,7 +669,7 @@
         setLive('speaking');
         addBubble('sal', personaDisplayName(persona), text);
       } else if (type === 'speak_done') {
-        setLive('listening');
+        setLive('hearing');
       }
     };
   }
