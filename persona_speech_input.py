@@ -59,7 +59,12 @@ HUB_URL = "http://127.0.0.1:8400"
 # InputProfile.stt_model field meant to hold this once the editable-preferences
 # system exists, but nothing wires it up to this service yet -- until then,
 # this constant is the one place to change it.
-STT_MODEL        = "medium"
+
+# tiny.en, tiny, base.en, base, small.en, small, medium.en, medium,
+# large-v1, large-v2, large-v3, large, distil-large-v2, distil-medium.en,
+# distil-small.en, distil-large-v3, large-v3-turbo, turbo
+
+STT_MODEL        = "large-v3-turbo"
 SILENCE_DURATION = 0.6
 
 # ─── Test Configuration ───────────────────────────────────────────────────────
