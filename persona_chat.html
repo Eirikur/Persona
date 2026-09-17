@@ -236,7 +236,7 @@
      existing color alone so muted state reads as "off" without a new hue */
   #state-hearing {
     cursor: pointer;
-    opacity: 0.3;
+    opacity: 1;
     transition: opacity 100ms linear;
   }
 
@@ -640,9 +640,11 @@
       const {type, text, persona, level} = data;
 
       // Fires ~10x/second while the mic is open -- handled separately so it
-      // doesn't flood the log panel or the console.
+      // doesn't flood the log panel or the console. Inverted on purpose: at
+      // rest HEARING matches the other idle labels' brightness, and it dims
+      // as mic activity rises rather than the other way around.
       if (type === 'mic_level') {
-        hearingEl.style.opacity = (0.3 + 0.7 * level).toFixed(2);
+        hearingEl.style.opacity = (1 - 0.7 * level).toFixed(2);
         return;
       }
 
