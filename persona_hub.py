@@ -194,6 +194,7 @@ def llm(persona: Persona, text: str) -> str:
         "model":         persona.model,
         "system_prompt": persona.system_prompt,
         "messages":      [{"role": "user", "content": text}],
+        "tools":         persona.tools,
     })
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
@@ -212,15 +213,16 @@ def speak(response_text: str, voice_prompt: str) -> None:
 
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
-def dispatch(text: str, typed: bool = False) -> list[str]:
+def dispatch(text: str) -> list[str]:
     """
     Decide which loaded personas should respond to this input.
 
     Returns a list of persona names. Empty list = no response needed.
 
-    `typed` input (from the chat box) is a deliberate, addressed act, so it
-    skips the named-mode wake-word gate and reaches the loaded personas
-    directly. Only voice input is gated by wake words in named mode.
+    Typed and voice input are gated identically: in named mode, the text
+    must start with a loaded persona's wake word (e.g. typing "salice ..."
+    addresses just Sal), so that with several personas loaded, typing a
+    plain sentence doesn't page all of them at once.
 
     Routing order:
       1. Apply MISHEARINGS corrections
@@ -228,8 +230,8 @@ def dispatch(text: str, typed: bool = False) -> list[str]:
       3. COMMANDS match    → run shell command, return []
       4. Quiet phrases     → switch to named mode, return []
       5. BROADCAST_PHRASES → all loaded personas
-      6. Named mode + voice → persona whose wake word matches, or []
-      7. Open mode or typed → all loaded personas
+      6. Named mode → persona whose wake word matches, or []
+      7. Open mode  → all loaded personas
     """
     global MODE
 
@@ -269,7 +271,7 @@ def dispatch(text: str, typed: bool = False) -> list[str]:
         if normalized.startswith(phrase):
             return list(loaded)
 
-    if MODE == "named" and not typed:
+    if MODE == "named":
         for pname in loaded:
             persona = state.personas.get(pname)
             if not persona:
@@ -286,7 +288,7 @@ def dispatch(text: str, typed: bool = False) -> list[str]:
 
 class ThinkRequest(BaseModel):
     text: str
-    typed: bool = False   # True = from chat box, skips wake-word gate + cooldown
+    typed: bool = False   # True = from chat box, skips the cooldown gate
 
 
 @app.get("/state")
@@ -433,22 +435,29 @@ def converse(req: ThinkRequest):
         return {"text": ""}
 
     start_time = time.time()
-    to_respond = dispatch(req.text, req.typed)
+    to_respond = dispatch(req.text)
+
+    # Shown as a chat bubble regardless of whether any persona will answer,
+    # so the owner can see what speech input heard even when nobody's named.
+    emit("user_turn", req.text)
+
     if not to_respond:
         emit("speak_done", "")
         return {"text": ""}
 
     if not req.typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
         print(f"ignored (cooldown): {req.text!r}")
+        emit("speak_done", "")
         return {"text": ""}
 
-    emit("user_turn", req.text)
     responses = []
 
     for pname in to_respond:
         persona  = state.personas[pname]
         voice    = state.voices.get(persona.voice, state.voices["default"])
-        
+
+        emit("inference", "")
+
         # Time LLM inference
         llm_start = time.time()
         response = llm(persona, req.text)

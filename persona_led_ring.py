@@ -64,7 +64,7 @@ EVENT_TO_STATE = {
     "recording_start": "listening",
     "recording_stop":  "resting",
     "heard":           "transcribing",
-    "user_turn":       "inference",
+    "inference":       "inference",
     "sal_turn":        "speaking",
     "speak_done":      "resting",
 }

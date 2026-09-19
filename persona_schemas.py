@@ -60,6 +60,7 @@ class Persona:
     input: str = "default"
     provider: str = "cerebras"
     model: str | None = None
+    tools: list[str] = field(default_factory=list)   # names into persona_tools.TOOLS
 
 
 @dataclass
@@ -68,7 +69,29 @@ class GlobalState:
     active_persona: str = "default"
     loaded_personas: list[str] = field(default_factory=lambda: ["default"])
 
-    personas: dict[str, Persona]      = field(default_factory=lambda: {"default": Persona(name="default", wake_words=["salice", "sal"])})
+    personas: dict[str, Persona]      = field(default_factory=lambda: {
+        "default": Persona(name="default", wake_words=["salice", "sal"], tools=["web_search"]),
+
+        # Echo has provider="echo" -- persona_llm.py's echo branch hands the
+        # input straight back with no LLM call, for testing dispatch, voice,
+        # and multi-persona routing for free. See persona_llm.py's docstring.
+        "echo": Persona(
+            name="echo", wake_words=["echo"], provider="echo",
+            system_prompt="(no LLM call -- echo provider returns input verbatim)",
+        ),
+
+        # Stubs for personas to be filled in later -- name and wake word
+        # only, no system prompt written yet.
+        "major": Persona(name="major", wake_words=["major"], system_prompt="(not yet defined)"),
+        "hal":   Persona(name="hal",   wake_words=["hal"],   system_prompt="(not yet defined)"),
+        "house": Persona(name="house", wake_words=["house"], system_prompt="(not yet defined)"),
+
+        # The owner's own persona, nickname Cissy -- intended to act with
+        # the owner's authority (including filesystem access) once personas
+        # can call tools. No tools exist yet, so this is a stub too.
+        "system": Persona(name="system", wake_words=["system", "cissy"],
+                           system_prompt="(not yet defined -- intended to act as the owner)"),
+    })
     voices:   dict[str, VoiceProfile] = field(default_factory=lambda: {"default": VoiceProfile(name="default")})
     inputs:   dict[str, InputProfile] = field(default_factory=lambda: {"default": InputProfile(name="default")})
 

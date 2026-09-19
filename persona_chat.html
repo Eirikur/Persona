@@ -426,6 +426,7 @@
         <option value="cerebras">cerebras</option>
         <option value="perplexity">perplexity</option>
         <option value="openrouter">openrouter</option>
+        <option value="echo">echo (no LLM, for testing)</option>
       </select>
     </div>
 
@@ -659,12 +660,13 @@
         setTimeout(() => preview.classList.remove('corrected'), 800);
       } else if (type === 'user_turn') {
         preview.textContent = '';
-        setLive('inference');
         if (typedPending.has(text)) {
           typedPending.delete(text);
         } else {
           addBubble('user', 'you', text);
         }
+      } else if (type === 'inference') {
+        setLive('inference');
       } else if (type === 'sal_turn') {
         setLive('speaking');
         addBubble('sal', personaDisplayName(persona), text);
