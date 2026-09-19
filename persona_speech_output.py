@@ -5,6 +5,7 @@
 #    "setuptools<81",
 #    "fastapi",
 #    "uvicorn",
+#    "httpx",
 #    "numpy",
 #    "torch",
 #    "torchaudio",
@@ -28,6 +29,7 @@ import time
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
 
+import httpx
 import sounddevice as sd
 import uvicorn
 from fastapi import FastAPI
@@ -39,6 +41,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="perth")
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 PORT                 = 8402
+HUB_URL              = "http://127.0.0.1:8400"
 DEVICE               = "cpu"
 CHATTERBOX_MODEL     = "standard"
 DEFAULT_VOICE_PROMPT = "audio/bird-dream.wav"
@@ -160,6 +163,11 @@ def speak(req: SpeakRequest):
     elapsed = time.time() - started
 
     print(f"{words} words, {elapsed:.2f}s render, {elapsed / words:.2f}s/word")
+
+    try:
+        httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
+    except Exception:
+        pass  # the hub being briefly unavailable shouldn't hold up playback
 
     play_speech(wav)
 

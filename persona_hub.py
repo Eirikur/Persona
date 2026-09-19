@@ -363,6 +363,25 @@ def recording_stop():
     return {"ok": True}
 
 
+@app.post("/tool_call/{name}")
+def tool_call(name: str):
+    """Relay persona_llm.py's signal that it's about to run a tool call, so
+    the LED ring and chat UI can show that the wait includes a tool, not
+    just the model thinking."""
+    emit("tool_call", name)
+    return {"ok": True}
+
+
+@app.post("/playback_start")
+def playback_start():
+    """Relay persona_speech_output.py's signal that rendered audio has
+    started actually playing, as distinct from sal_turn (text is ready,
+    but Chatterbox hasn't rendered it yet) -- the two can be many seconds
+    apart on a long reply."""
+    emit("playback_start", "")
+    return {"ok": True}
+
+
 @app.post("/model/{model}")
 def set_model(model: str):
     """Update the model for the active persona."""

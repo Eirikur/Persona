@@ -25,6 +25,7 @@ the result back, for up to a few rounds, before returning the final reply.
 import json
 import os
 import uvicorn
+import httpx
 from fastapi import FastAPI, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -37,7 +38,8 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
-PORT = 8401
+PORT     = 8401
+HUB_URL  = "http://127.0.0.1:8400"
 
 MAX_TOOL_ROUNDS = 3   # safety valve against a model that never stops calling tools
 
@@ -67,6 +69,11 @@ class ChatRequest(BaseModel):
 
 def run_tool_call(call) -> dict:
     """Run one model-requested tool call and return its result as a tool message."""
+    try:
+        httpx.post(f"{HUB_URL}/tool_call/{call.function.name}", timeout=1.0)
+    except Exception:
+        pass  # the hub being briefly unavailable shouldn't block the tool call
+
     tool = TOOLS.get(call.function.name)
     if tool:
         result = tool["run"](json.loads(call.function.arguments))

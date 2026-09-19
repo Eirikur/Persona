@@ -37,6 +37,14 @@ EFFECT_SINGLE = 3
 EFFECT_BREATH = 1
 EFFECT_DOA    = 4
 
+# Amber = "the LLM's area, in progress" -- covers both a tool call running
+# during inference and a reply waiting to be rendered into audio. Distinct
+# from inference's plain white ("just thinking") and speaking's green
+# ("audibly talking now"). See notes/LED-Light-Ring-Sequence-Research.md --
+# amber was this project's own earlier read of "in-progress/caution" before
+# inference moved to white, and that slot was sitting unused.
+LLM_ACTIVE = {"effect": EFFECT_BREATH, "color": 0xFFA000, "speed": 3}
+
 # One look per pipeline state, colors and effects carried over from the
 # hand-tuned trials in p.sh. LISTENING and TRANSCRIBING are static solid
 # colors -- see BLINK_STATES below, which reissues them on mic activity.
@@ -48,7 +56,9 @@ STATE_LOOKS = {
     "listening":    {"effect": EFFECT_SINGLE, "color": 0x880000},               # red, recording
     "transcribing": {"effect": EFFECT_SINGLE, "color": 0x0000CD},               # blue
     "inference":    {"effect": EFFECT_BREATH, "color": 0xFFFFFF, "speed": 3},   # white, breathing
-    "speaking":     {"effect": EFFECT_SINGLE, "color": 0x00AA00},               # green
+    "tool_call":    LLM_ACTIVE,                                                 # amber, breathing
+    "rendering":    LLM_ACTIVE,                                                 # amber, breathing -- reply is text, not audio yet
+    "speaking":     {"effect": EFFECT_BREATH, "color": 0x00AA00, "speed": 3},   # green, breathing -- audibly talking
 }
 
 # Static-color states that should blink -- reissue their own look's command --
@@ -56,16 +66,18 @@ STATE_LOOKS = {
 # along with live mic activity the same way the chat UI's HEARING label does.
 BLINK_STATES = ("listening", "transcribing")
 
-# Mirrors persona_chat.html's setLive() event -> state mapping, so the LED
-# ring and the chat UI agree on what each SSE event means. recording_start/
-# recording_stop come straight from RealtimeSTT's VAD, via the hub -- see
-# persona_speech_input.py's on_recording_start/on_recording_stop callbacks.
+# What each hub SSE event means for the ring's current look. The chat UI
+# reads the same events but renders them differently (color modifiers on
+# top of its four labels, rather than a full state swap) -- see
+# persona_chat.html's connectSSE handler.
 EVENT_TO_STATE = {
     "recording_start": "listening",
     "recording_stop":  "resting",
     "heard":           "transcribing",
     "inference":       "inference",
-    "sal_turn":        "speaking",
+    "tool_call":       "tool_call",
+    "sal_turn":        "rendering",
+    "playback_start":  "speaking",
     "speak_done":      "resting",
 }
 
