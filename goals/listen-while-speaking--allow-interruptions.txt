@@ -1,0 +1,19 @@
+Investigate how the "transcription of model speech as if the model was the user" problem was solved. I think it may stop listening, speak until done, start listening.
+
+Draft algorithm:
+      The persona saves the time (of day) that it started speaking.
+      
+      Speaking is done in a form of stream, so that the first words
+      of a response can be emitted without waiting for a full sentence.
+      
+      As each chunk of arrives, first check to see if the user has
+      spoken since the persona started speaking.
+
+      Issues: --
+        Does any user speech abort the persona's speech?
+	     Perhaps we only abort if System hears "stop" or single word stop command.
+	     Because of streaming, we don't recieve what the persona's
+	     	     full utterance would have been.
+             I want to at least try "any speach from user is a stop word."
+
+if VAD (voice detection) has triggered since  

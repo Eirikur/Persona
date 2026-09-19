@@ -1,0 +1,19 @@
+My first idea, but see second:
+State machine marching states display is getting very good.  Going
+back to Hearing without progress past transcription looks a bit odd.
+I'd like to try blinking INFERENCE to red, one "long enough to see"
+blink, doesn't wait, we activate HEARING immediately or first or in
+parallel.  If this doesn't feel natural we can remove it.
+
+I want to put transcribed user speech into bubbles in the chat room
+even if there is no Persona that will hear.  See the diffence in
+behavior with typed input. It shows up. Sal responded to typed input
+somehow bypassing her named-mode state? That's probably wrong because
+I could not address another persona (in either mode) if Sal responds
+to typing or my proposed "always transcribe into the chat" feature.
+
+
+
+
+I hate staying with this mic stuff, but it will build some infrastructure for later stuff.
+Look into the pactl "get the name of the default audio input" stuff I asked Perplexity to research.

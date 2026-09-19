@@ -1,0 +1,47 @@
+* There is a special human called the User. The User is like a Unix
+  superuser and can create users, even superusers, but the User is the
+  Owner of the system.
+
+* There is a special persona called System. It's a normal persona with
+  tools (and permissions) to operate the system, loading and unloading
+  personas, modifying a persona, and shutting down the system. It would
+  become the standard way to operate the system because it will be easier
+  than manual editing.
+
+* Supplied personas -- You can modify and save them, but not delete
+  them.  Feminine System -- Cissy, short for System. It should be
+  surprising to see that she has a given name, Cecilia. She is a real
+  persona, but not expected to be a deep conversationalist. She gets
+  stuff done.  She commonly works with House.  Masculine System --
+  Alexi , from actor Alexis Kanner (The PRisoner)
+  
+
+
+* Governance: This seems very hierarchical but I don't know
+  how to make it more egalitarian or fair to the AI personas. I
+  suppose they have to gain the trust of the User as a human does.
+
+* When first activated, Persona creates the User and System
+  personas. The User's voice is sampled for recognition. In day-to-day
+  use, the user's voice is recognized to authorize them.
+  - There's a setting for requiring second factor (password) for
+    - Any interaction at all. Otherwise there is no current logged-in user.
+    - Any modification the settings.
+  
+
+* Preferred microphones, Current microphone. These are just string
+names. Current microphone is persisted to settings. The system has a
+list of preferred microphones in preference order. It can be edited by
+the manual settings editor.
+
+* Use voice to search for a setting and change it. Perhaps this is a
+  tool or skill for the models to use. This is probably reserved for
+  the System persona. It's just something you ask the system to do.
+
+
+* Safety: A persona must not do harm in the outside world, or harm a
+  persona, or harm a human.  A persona's access to the internet must
+  be constrained to reading from approved sites. This can be implemented in a tool.
+  Initially, a persona has only reading and searching tools.
+  All internet actions must be approved by the User, as if they
+  are a code change being approved by a human.
