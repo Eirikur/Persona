@@ -215,7 +215,7 @@ def trigger_test():
     
     try:
         print(f"Sending test phrase to hub: {test_text!r}")
-        r = httpx.post(f"{HUB_URL}/converse", json={"text": test_text, "typed": True}, timeout=120.0)
+        r = httpx.post(f"{HUB_URL}/converse", json={"text": test_text, "typed": True, "speaker": "Test"}, timeout=120.0)
         r.raise_for_status()
         print(f"Hub responded: {r.status_code}")
         return {"status": "success", "text": test_text}

@@ -119,11 +119,11 @@ async def startup_event():
         print(f"LLM warmup failed: {e}")
 
 
-def emit(event_type: str, text: str) -> None:
+def emit(event_type: str, text: str, **extra) -> None:
     """Push a generic event to all connected SSE clients."""
     if not event_loop:
         return
-    data = json.dumps({"type": event_type, "text": text})
+    data = json.dumps({"type": event_type, "text": text, **extra})
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
 
@@ -288,7 +288,8 @@ def dispatch(text: str) -> list[str]:
 
 class ThinkRequest(BaseModel):
     text: str
-    typed: bool = False   # True = from chat box, skips the cooldown gate
+    typed: bool = False    # True = from chat box, skips the cooldown gate
+    speaker: str = "you"   # chat-bubble label for this input; overridden by e.g. the test trigger
 
 
 @app.get("/state")
@@ -458,7 +459,7 @@ def converse(req: ThinkRequest):
 
     # Shown as a chat bubble regardless of whether any persona will answer,
     # so the owner can see what speech input heard even when nobody's named.
-    emit("user_turn", req.text)
+    emit("user_turn", req.text, speaker=req.speaker)
 
     if not to_respond:
         emit("speak_done", "")

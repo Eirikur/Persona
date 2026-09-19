@@ -662,7 +662,7 @@
 
     es.onmessage = e => {
       const data = JSON.parse(e.data);
-      const {type, text, persona, level} = data;
+      const {type, text, persona, level, speaker} = data;
 
       // Fires ~10x/second while the mic is open -- handled separately so it
       // doesn't flood the log panel or the console. Inverted on purpose: at
@@ -688,7 +688,7 @@
         if (typedPending.has(text)) {
           typedPending.delete(text);
         } else {
-          addBubble('user', 'you', text);
+          addBubble('user', speaker || 'you', text);
         }
       } else if (type === 'inference') {
         stateEls.inference.classList.remove('tool');
