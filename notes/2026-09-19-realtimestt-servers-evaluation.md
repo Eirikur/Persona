@@ -192,10 +192,11 @@ The larger finding: both versions spend about 5 s on a 1.8 s utterance. Neither
 passes `cpu_threads` to `faster_whisper.WhisperModel`, so CTranslate2 uses its
 default of 4 threads on a 16-core/32-thread CPU. `OMP_NUM_THREADS` is honoured
 when `cpu_threads` is unset. Not yet applied: more threads for STT will contend
-with Chatterbox rendering, which also runs on the CPU. The harness lives at
-`ab_harness.py` in the session scratchpad (feeds the clip in real time, then
-silence; works on both versions) and is worth keeping if the comparison is
-repeated for the sherpa-onnx engines.
+with Chatterbox rendering, which also runs on the CPU. The harness is `tests/stt_latency_harness.py` (feeds the clip in real time,
+then silence; works on both versions). Reuse it to compare the sherpa-onnx
+engines against the Whisper numbers above: run it with the speech-input env's
+python, `python -u tests/stt_latency_harness.py <label> 3`. It hard-codes the
+Whisper settings, so it needs the engine keywords added for step 3.
 
 **Rendering.** No change found. `persona-speech-output`'s uv env is still dated
 2026-08-26 (not rebuilt), and per-word render time from `logs/speech-out.log`
@@ -235,3 +236,38 @@ and the script setting also covers direct runs. `setdefault` means an
 `OMP_NUM_THREADS` in the environment still wins. Verified in test mode: up to
 18 busy threads during decode with the script's default, against 7 with
 `OMP_NUM_THREADS=4` forced. Model stays `large-v3-turbo` (owner's decision).
+
+## Where we stopped (end of session, 2026-09-19)
+
+Branch `stt-engine-experiment`, off `led-ring-vad-states`; nothing pushed, and
+`main` is untouched. Committed and tested:
+
+- `89eccc1` RealtimeSTT 1.1.2 on Python 3.12 (`==3.12.*`, `setuptools<81`),
+  test mode fixed. Direct test-mode run passes.
+- `0dfb120` measured timings recorded in this note.
+- `ebf53f4` 16 CPU threads for faster-whisper. Measured 5.5 s -> 3.9 s; the
+  thread count during decode was checked directly.
+- Model is still `large-v3-turbo` (owner's decision). All six services were
+  running at close, speech-in included.
+
+Not verified: whether the 16-thread change *feels* faster with the live mic
+and the full stack. The owner confirmed 1.1.2 worked by ear earlier (after
+unmuting); the 16-thread change was applied after that.
+
+Known and left alone: the hub's HEARING mute is in-memory, so a restart
+un-mutes it; Sal's own voice is transcribed as input (the `listen-while-
+speaking` goal); `AttributeError ... 'FasterWhisperEngine' object has no
+attribute 'close'` is logged harmlessly at shutdown.
+
+**Next step: step 3 of the plan above.** Add `TRANSCRIPTION_ENGINE` and
+`REALTIME_TRANSCRIPTION_ENGINE` constants next to `STT_MODEL` (default
+`faster_whisper`, so nothing changes), commit; then
+`stt-install-sherpa-models --root <persistent dir> --model all` (about 1 GB;
+`/` had 1.1 TB free), switch to `sherpa_onnx_nemotron` (live) and
+`sherpa_onnx_parakeet` (final), and compare by ear and with the harness.
+Expect weaker "Sal" recognition without `initial_prompt`. This needs the
+`RealtimeSTT[sherpa-onnx]` extra in the script's dependency block.
+
+Untracked owner files at close: `Friday9-18-notes.txt`, `goals/`, `p.sh`.
+They were committed as-is in a separate commit so they travel with the
+archive; where they should live is still the owner's call.
