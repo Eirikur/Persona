@@ -113,7 +113,44 @@ full stack.
    is a Whisper feature: the "Salice" bias will not carry over, so
    `MISHEARINGS` matters again with these engines.
 
-Rollback at every step is `git revert`; the old uv env stays cached.
+Rollback at every step is `git revert`. Caveat: uv rebuilt the speech-input
+env in place (same cache directory), so the old 0.3.94 environment is gone; a
+revert re-resolves and will land on 1.1.2 unless the script pins
+`RealtimeSTT==0.3.94`.
+
+## Step 1 result (2026-09-19, branch `stt-engine-experiment`)
+
+Direct test with `PERSONA_TEST_MODE=1` passes on RealtimeSTT 1.1.2 with
+faster-whisper large-v3-turbo: the clip transcribes as "Sal, do you know what
+time it is?" (the `initial_prompt` "Sal" bias still works). Getting there took
+four fixes, all now in `persona_speech_input.py`:
+
+1. `requires-python = "~=3.12"` means "3.12 or newer", not "3.12 only", so uv
+   had built the env on Python 3.13, which RealtimeSTT 1.1.2 does not support.
+   Now `==3.12.*`.
+2. `webrtcvad` imports `pkg_resources`, which setuptools 81+ removed (same trap
+   as the ROCm note). Added `"setuptools<81"`, as `persona_speech_output.py`
+   already does. Removed the script's own redundant `webrtcvad` line;
+   RealtimeSTT 1.1.2 depends on `webrtcvad-wheels`.
+3. 1.1.x drops audio that arrives faster than real time ("Audio queue size
+   exceeds latency limit"), so test mode's single `feed_audio(whole_clip)` was
+   silently discarded. Test mode now feeds the clip with the library's paced
+   `feed_audio_file()` plus three seconds of silence, in a background thread
+   (new function `feed_test_audio`).
+4. Removed the now-unused `soundfile` import.
+
+Not yet verified: live microphone use through the full stack. Do that before
+step 2.
+
+## Gotcha: do not keep upstream clones inside the repo
+
+The `RealtimeSTT` repo has an `__init__.py` at its root, so a clone sitting in
+`~/Proj/Persona/RealtimeSTT/` is importable as a package named `RealtimeSTT`.
+`persona_speech_input.py` runs with the repo as its script directory, so that
+folder shadowed the installed library and the service died at import with
+`ImportError: cannot import name 'AudioToTextRecorder'`. Ignoring the clones in
+`.gitignore` is not enough. They now live at `~/Proj/RealtimeSTT` and
+`~/Proj/RealtimeTTS`, outside the repo.
 
 ## Open items
 

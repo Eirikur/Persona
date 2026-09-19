@@ -2,8 +2,9 @@
 """requires-python = ">=3.11"
    Now pinned to 3.12.x because RealtimeSTT doesn't support 3.13 yet."""
 # /// script
-# requires-python = "~=3.12"
+# requires-python = "==3.12.*"
 # dependencies = [
+#    "setuptools<81",
 #    "fastapi",
 #    "uvicorn",
 #    "httpx",
@@ -15,10 +16,9 @@
 #    "soundfile",
 #    "torchaudio",
 #    "pyaudio",
-#    "webrtcvad",
 #    "openwakeword",
 #    "pvporcupine",
-#    "RealtimeSTT",
+#    "RealtimeSTT>=1.1.2",
 #    "halo",
 #    "nvidia-cublas-cu12",
 #    "nvidia-cudnn-cu12",
@@ -35,7 +35,6 @@ import httpx
 import torch
 import uvicorn
 import numpy as np
-import soundfile as sf
 from fastapi import FastAPI
 
 torch.backends.nnpack.enabled = False  # silence unsupported-hardware NNPACK warnings
@@ -87,6 +86,21 @@ def _detect_device():
     if torch.cuda.is_available():
         return "cuda", "float16"
     return "cpu", "int8"
+
+
+def feed_test_audio(rec):
+    """
+    Play the test clip into the recorder at real-time speed, then three
+    seconds of silence so the recorder can tell the utterance has ended.
+    RealtimeSTT 1.1.x discards audio that arrives faster than real time, so
+    the clip cannot be handed over in a single call.
+    """
+    rec.feed_audio_file(TEST_AUDIO_FILE)
+
+    tenth_of_a_second = np.zeros(1600, dtype=np.float32)   # 16 kHz samples
+    for step in range(30):
+        rec.feed_audio(tenth_of_a_second)
+        time.sleep(0.1)
 
 
 def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
@@ -151,16 +165,8 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
             return
         
         print(f"Test Mode: Feeding audio from {TEST_AUDIO_FILE}")
-        data, samplerate = sf.read(TEST_AUDIO_FILE)
-        if samplerate != 16000:
-            print(f"Warning: Expected 16kHz audio, got {samplerate}Hz. Results may be poor.")
-        
-        data = data.astype(np.float32)
-        if len(data.shape) > 1:
-            data = np.mean(data, axis=1)
-            
-        rec.feed_audio(data)
-        print("Audio fed. Waiting for transcription...")
+        threading.Thread(target=feed_test_audio, args=(rec,), daemon=True).start()
+        print("Audio feeding started. Waiting for transcription...")
     else:
         print("Listening — speak now")
 
