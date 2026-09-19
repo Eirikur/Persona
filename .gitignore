@@ -12,3 +12,7 @@ __pycache__/
 .claude/
 logs/
 .env
+
+# Upstream clones kept for reference (nested git repos)
+RealtimeSTT/
+RealtimeTTS/
