@@ -163,3 +163,50 @@ folder shadowed the installed library and the service died at import with
   device-selection logic is the obvious first candidate, since Typist and
   Persona both need it. `~/Proj/claude-tools` holds cross-project tools; move
   things there only once they are reused for real.
+
+## Step 1 follow-up: "recognition and rendering feel slower" (measured)
+
+After the 1.1.2 bump the owner reported slower recognition and slower speech
+rendering. Measured rather than guessed. Note that the first hub-side
+confusion was unrelated: HEARING had been clicked, so the hub was muted and
+silently dropped all voice input (see `/converse` in `persona_hub.py`).
+
+**Recognition.** A/B of the same clip (`tests/test_speech.wav`, 1.8 s of
+speech) on the same machine with production settings (large-v3-turbo, CPU int8,
+realtime on, `post_speech_silence_duration=0.6`, initial_prompt). Latency is
+last speech audio fed -> `text()` returned, three runs each:
+
+| Configuration                        | Runs (s)              | Median |
+|--------------------------------------|-----------------------|--------|
+| RealtimeSTT 0.3.94 (throwaway env)   | 4.71, 4.99, 5.00      | 4.99   |
+| RealtimeSTT 1.1.2 (current)          | 5.40, 5.52, 5.57      | 5.52   |
+| 1.1.2 + `OMP_NUM_THREADS=16`         | 3.85, 3.99, 3.85      | 3.85   |
+| 1.1.2 + `OMP_NUM_THREADS=8`          | 4.24, 4.16, 4.26      | 4.24   |
+
+So 1.1.2 costs about half a second (about 10%), consistent with the new
+`deactivity_silence_confirmation_duration = 0.16` plus other overhead. Explicit
+recorder defaults are otherwise unchanged between the two versions (the only
+changes: `silero_use_onnx`, `wakeword_backend`; 1.1.2 adds `silero_backend='auto'`).
+
+The larger finding: both versions spend about 5 s on a 1.8 s utterance. Neither
+passes `cpu_threads` to `faster_whisper.WhisperModel`, so CTranslate2 uses its
+default of 4 threads on a 16-core/32-thread CPU. `OMP_NUM_THREADS` is honoured
+when `cpu_threads` is unset. Not yet applied: more threads for STT will contend
+with Chatterbox rendering, which also runs on the CPU. The harness lives at
+`ab_harness.py` in the session scratchpad (feeds the clip in real time, then
+silence; works on both versions) and is worth keeping if the comparison is
+repeated for the sherpa-onnx engines.
+
+**Rendering.** No change found. `persona-speech-output`'s uv env is still dated
+2026-08-26 (not rebuilt), and per-word render time from `logs/speech-out.log`
+is 0.61 s/word for the most recent 6 replies, 0.69 for the previous 30 and
+0.74 before that. The logs carry no timestamps, so this is by position in the
+file, not by clock time.
+
+**Also seen.** Sal's own voice is transcribed as user input (for example her
+weather reply), costing a full large-v3-turbo decode each time; the hub's
+`SPEAK_COOLDOWN` discards the text afterwards but the recorder already paid
+for it (24 cooldown discards in the log before the last hub restart, 1 after).
+This is the `goals/listen-while-speaking` problem; not fixed here. Also
+harmless on 1.1.2: `AttributeError: 'FasterWhisperEngine' object has no
+attribute 'close'` is logged at shutdown.
