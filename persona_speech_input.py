@@ -67,6 +67,16 @@ HUB_URL = "http://127.0.0.1:8400"
 STT_MODEL        = "large-v3-turbo"
 SILENCE_DURATION = 0.6
 
+# EXPERIMENT (2026-09-18): Whisper has no reason to guess "Salice" over
+# "Alice"/"Solace" from audio alone, which is why MISHEARINGS has grown so
+# long. faster-whisper's initial_prompt biases the transcription toward
+# whatever text it's given, so feeding it the name -- spelled the way we
+# want it recognized, in a natural sentence -- may cut mishearings off at
+# the source instead of patching them after the fact. Fed to both the
+# real-time and final passes below. If this doesn't measurably help after
+# a few days of real use, revert it rather than tuning the wording forever.
+WAKE_WORD_PROMPT = "Salice, pronounced sa-LEECE and often shortened to Sal, is a helpful voice assistant."
+
 # ─── Test Configuration ───────────────────────────────────────────────────────
 
 TEST_MODE = os.environ.get("PERSONA_TEST_MODE") == "1"
@@ -126,6 +136,8 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
         enable_realtime_transcription=True,
         use_microphone=not TEST_MODE,
         silero_sensitivity=0.1 if TEST_MODE else 0.4,
+        initial_prompt=WAKE_WORD_PROMPT,
+        initial_prompt_realtime=WAKE_WORD_PROMPT,
         on_recording_start=on_recording_start,
         on_recording_stop=on_recording_stop,
     )
