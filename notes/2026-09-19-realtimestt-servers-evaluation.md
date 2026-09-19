@@ -210,3 +210,28 @@ for it (24 cooldown discards in the log before the last hub restart, 1 after).
 This is the `goals/listen-while-speaking` problem; not fixed here. Also
 harmless on 1.1.2: `AttributeError: 'FasterWhisperEngine' object has no
 attribute 'close'` is logged at shutdown.
+
+## Option 1 applied: 16 CPU threads for Whisper (2026-09-19)
+
+Accepted after a contention test: Whisper decode and a live Chatterbox render
+running at the same time (Chatterbox render, 25 words; Whisper steady-state
+runs, seconds from end of speech to text):
+
+| Configuration                 | Whisper (runs 2, 3)  | Chatterbox render |
+|-------------------------------|----------------------|-------------------|
+| Chatterbox alone              | n/a                  | 13.8, 14.8 s      |
+| Both, default (4) threads     | 5.19, 5.32 / 5.35, 5.24 | 16.2, 18.3 s   |
+| Both, `OMP_NUM_THREADS=16`    | 3.95, 3.96 / 3.95, 4.02 | 16.1, 16.1 s   |
+
+The first Whisper run of each pair is slower (7.6 s at default threads, 5.5 s
+at 16), probably warm-up. Two runs per configuration; not a rigorous benchmark,
+accepted as good enough to work with. Chatterbox running next to Whisper costs
+about 2 s (roughly 12%) regardless of the thread setting.
+
+Applied as `os.environ.setdefault("OMP_NUM_THREADS", "16")` above the imports
+in `persona_speech_input.py`, not in the systemd unit: the installed units are
+copies in `~/.config/systemd/user/`, so a unit change would need two edits,
+and the script setting also covers direct runs. `setdefault` means an
+`OMP_NUM_THREADS` in the environment still wins. Verified in test mode: up to
+18 busy threads during decode with the script's default, against 7 with
+`OMP_NUM_THREADS=4` forced. Model stays `large-v3-turbo` (owner's decision).
