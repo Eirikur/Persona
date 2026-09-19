@@ -33,7 +33,9 @@
     --text-muted:   #607080;
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
-    --state-live:   #C4CDD5;
+    --state-live:     #C4CDD5;
+    --state-active:   #b8956a;   /* "the LLM's area, in progress" -- tool call, or a reply waiting to be rendered into audio */
+    --state-speaking: #5FAD6B;   /* audibly talking, right now */
     --font-sal:     'Alegreya', Georgia, serif;
     --font-user:    'Lucida Casual', 'Lucida Sans', sans-serif;
     --font-ui:      'Lucida Casual', 'Lucida Sans', sans-serif;
@@ -231,6 +233,29 @@
     margin-right: 5px;
     color: var(--accent-sal);
   }
+
+  /* INFERENCE and SPEAKING can run long (a tool call, or Chatterbox
+     rendering a reply) -- breathing says "still working," not stuck.
+     Scoped to just these two ids: #state-hearing's opacity is driven
+     directly by the mic_level handler (see connectSSE), and this must
+     not fight that. */
+  #state-inference.live,
+  #state-speaking.live {
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 1;    }
+    50%      { opacity: 0.35; }
+  }
+
+  /* Sub-state color, layered on top of the plain .live color above.
+     INFERENCE: white while thinking (the plain .live color), amber while
+     a tool call is running. SPEAKING: amber while Chatterbox renders the
+     reply (text is ready, no audio yet), green once it's actually playing. */
+  #state-inference.live.tool   { color: var(--state-active);   }
+  #state-speaking.live.rendering { color: var(--state-active);   }
+  #state-speaking.live.playing   { color: var(--state-speaking); }
 
   /* clicking HEARING mutes voice input; strike-through leaves the label's
      existing color alone so muted state reads as "off" without a new hue */
@@ -666,11 +691,25 @@
           addBubble('user', 'you', text);
         }
       } else if (type === 'inference') {
+        stateEls.inference.classList.remove('tool');
         setLive('inference');
+      } else if (type === 'tool_call') {
+        // A tool call can start after INFERENCE is already showing (or,
+        // rarely, before the queued setLive('inference') above has applied
+        // it) -- adding the modifier class either way is harmless, since
+        // it only paints once .live is actually on the element.
+        stateEls.inference.classList.add('tool');
       } else if (type === 'sal_turn') {
+        stateEls.speaking.classList.add('rendering');
+        stateEls.speaking.classList.remove('playing');
         setLive('speaking');
         addBubble('sal', personaDisplayName(persona), text);
+      } else if (type === 'playback_start') {
+        stateEls.speaking.classList.remove('rendering');
+        stateEls.speaking.classList.add('playing');
       } else if (type === 'speak_done') {
+        stateEls.inference.classList.remove('tool');
+        stateEls.speaking.classList.remove('rendering', 'playing');
         setLive('hearing');
       }
     };
