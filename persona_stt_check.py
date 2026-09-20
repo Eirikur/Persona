@@ -10,6 +10,9 @@ same moment.
 Usage: ./persona_stt_check.py [rounds]
 
 Exit code: 0 = every round matched, 1 = a round misheard, 2 = no reference text.
+
+The last line, "SAY: ...", is a short spoken version of the result. When this runs
+from the hub's script runner (persona_scripts.py), the persona says it aloud.
 """
 # /// script
 # requires-python = "==3.12.*"
@@ -109,6 +112,14 @@ def word_error_rate(reference, heard):
         previous = current
 
     return previous[len(heard_words)] / max(len(reference_words), 1)
+
+
+def spoken_summary(passed, median):
+    """The short result the persona says aloud after the run. Kept brief: every word costs render time."""
+    if passed:
+        return f"Recognition check passed. Median delay {median:.1f} seconds."
+
+    return "Recognition check failed. The words heard did not match."
 
 
 # ─── Feeding the Clip ─────────────────────────────────────────────────────────
@@ -246,6 +257,10 @@ def main():
 
     print(f"{verdict}: worst word errors {worst:.2f} (limit {MAX_WORD_ERROR_RATE}), "
           f"median latency {median:.2f}s")
+
+    # The hub's script runner speaks this line once the script has exited.
+    print("SAY: " + spoken_summary(verdict == "PASS", median))
+
     sys.exit(0 if verdict == "PASS" else 1)
 
 
