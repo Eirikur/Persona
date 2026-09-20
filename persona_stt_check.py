@@ -226,6 +226,10 @@ def main():
 
         time.sleep(1.0)
 
+    # RealtimeSTT 1.1.2 logs harmless tracebacks while closing down (the
+    # Whisper engine has no close method, and a pipe is read after it closes).
+    # This script reports with print, so switching logging off hides only them.
+    logging.disable(logging.CRITICAL)
     rec.shutdown()
 
     if reference is None:

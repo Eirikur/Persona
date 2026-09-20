@@ -24,12 +24,13 @@ import time
 import uvicorn
 import httpx
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from persona_schemas import Persona, load, save
+from persona_scripts import SCRIPTS, script_output
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -420,6 +421,15 @@ def trigger_test():
         return r.json()
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/run_script/{name}")
+def run_script(name: str):
+    """Run one of the named scripts in persona_scripts.SCRIPTS and stream its output as plain text."""
+    if name not in SCRIPTS:
+        raise HTTPException(status_code=404, detail="no such script: " + name)
+
+    return StreamingResponse(script_output(name), media_type="text/plain")
 
 
 def run_shutdown():
