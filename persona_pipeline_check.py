@@ -23,6 +23,9 @@ Stages, in order:
 Usage: ./persona_pipeline_check.py [hub_url]
 
 Exit code: 0 = every stage happened, 1 = a stage was missing or the hub failed.
+
+The last line, "SAY: ...", is a short spoken version of the result. When this runs
+from the hub's script runner (persona_scripts.py), the persona says it aloud.
 """
 
 import json
@@ -96,27 +99,46 @@ def listen_for_events(hub_url):
 
 # ─── Reporting ────────────────────────────────────────────────────────────────
 
-def print_report():
-    """Print the time each stage took, the reply, and a total. Returns the stages that never happened."""
+def measure():
+    """
+    Work out how long each stage took. Returns (seconds, missing): seconds maps
+    each stage that happened to its duration, plus "total"; missing lists the
+    stages that never happened.
+    """
+    seconds = {}
     missing = []
 
     for name, begins, ends in STAGES:
-        if begins not in first_seen or ends not in first_seen:
-            print(f"  {name:<12} not seen")
+        if begins in first_seen and ends in first_seen:
+            seconds[name] = first_seen[ends] - first_seen[begins]
+        else:
             missing.append(name)
+
+    if "sent" in first_seen and "speak_done" in first_seen:
+        seconds["total"] = first_seen["speak_done"] - first_seen["sent"]
+
+    return seconds, missing
+
+
+def print_report(seconds, missing):
+    """Print the time each stage took, a total, and the reply that was spoken."""
+    stage_names = [stage[0] for stage in STAGES]
+
+    for name in stage_names:
+        if name in missing:
+            print(f"  {name:<12} not seen")
             continue
 
-        seconds = first_seen[ends] - first_seen[begins]
-        detail  = ""
+        detail = ""
 
         if name == "render" and replies:
             words  = len(replies[0].split())
-            detail = f"   {words} words, {seconds / max(words, 1):.2f}s per word"
+            detail = f"   {words} words, {seconds[name] / max(words, 1):.2f}s per word"
 
-        print(f"  {name:<12} {seconds:6.2f}s{detail}")
+        print(f"  {name:<12} {seconds[name]:6.2f}s{detail}")
 
-    if "sent" in first_seen and "speak_done" in first_seen:
-        print(f"  {'total':<12} {first_seen['speak_done'] - first_seen['sent']:6.2f}s")
+    if "total" in seconds:
+        print(f"  {'total':<12} {seconds['total']:6.2f}s")
 
     if replies:
         print(f"Reply: {replies[0]!r}")
@@ -124,7 +146,16 @@ def print_report():
     if len(replies) > 1:
         print(f"Note: {len(replies)} personas replied. Stage times cover the first reply only.")
 
-    return missing
+
+def spoken_summary(seconds, missing):
+    """The short result the persona says aloud after the run. Kept brief: every word costs render time."""
+    if missing:
+        problems = ". ".join(f"{name.capitalize()} did not happen" for name in missing)
+        return "Pipeline check failed. " + problems + "."
+
+    return (f"Pipeline check passed. Inference {seconds['inference']:.1f} seconds, "
+            f"render {seconds['render']:.1f}, playback {seconds['playback']:.1f}, "
+            f"total {seconds['total']:.1f}.")
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -157,13 +188,18 @@ def main():
     while "speak_done" not in first_seen and time.monotonic() < deadline:
         time.sleep(0.05)
 
-    missing = print_report()
+    seconds, missing = measure()
+    print_report(seconds, missing)
 
     if missing:
         print("FAIL: these stages did not happen: " + ", ".join(missing))
-        sys.exit(1)
+    else:
+        print("PASS: every stage happened")
 
-    print("PASS: every stage happened")
+    # The hub's script runner speaks this line once the script has exited.
+    print("SAY: " + spoken_summary(seconds, missing))
+
+    sys.exit(1 if missing else 0)
 
 
 if __name__ == "__main__":

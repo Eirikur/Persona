@@ -226,6 +226,39 @@ def speak(response_text: str, voice_prompt: str) -> None:
         print("speech output not available")
 
 
+def say(persona_name: str, text: str) -> None:
+    """
+    Show text as this persona's reply and speak it in their voice.
+
+    While it plays, `speaking` is True, and afterwards the cooldown runs, so
+    the microphone does not hear the persona and answer itself. Every spoken
+    reply goes through here, including the summaries scripts ask for.
+    """
+    global speaking, last_spoke
+
+    persona = state.personas[persona_name]
+    voice   = state.voices.get(persona.voice, state.voices["default"])
+
+    emit_sal(persona_name, text)
+    speaking = True
+
+    try:
+        # Time speech synthesis
+        speak_start = time.time()
+        speak(text, voice.sample_file or "audio/bird-dream.wav")
+        speak_duration = time.time() - speak_start
+        print(f"Speech output triggered in {speak_duration:.2f}s")
+    finally:
+        speaking   = False
+        last_spoke = time.time()
+
+
+def say_summary(text: str) -> None:
+    """Speak a script's SAY: line in the active persona's voice (Sal, until System has its own)."""
+    say(state.active_persona, text)
+    emit("speak_done", "")
+
+
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
 def dispatch(text: str) -> list[str]:
@@ -450,11 +483,11 @@ def trigger_test():
 
 @app.post("/run_script/{name}")
 def run_script(name: str):
-    """Run one of the named scripts in persona_scripts.SCRIPTS and stream its output as plain text."""
+    """Run one of the named scripts in persona_scripts.SCRIPTS and stream its output as plain text. Speaks any SAY: line it prints once it finishes."""
     if name not in SCRIPTS:
         raise HTTPException(status_code=404, detail="no such script: " + name)
 
-    return StreamingResponse(script_output(name), media_type="text/plain")
+    return StreamingResponse(script_output(name, say_summary), media_type="text/plain")
 
 
 def run_shutdown():
@@ -484,8 +517,6 @@ def converse(req: ThinkRequest):
     Main input endpoint. Accepts merged speech+keyboard text, dispatches to
     personas, runs LLM inference, and speaks each response in turn.
     """
-    global speaking, last_spoke
-
     if MUTED and not req.typed:
         return {"text": ""}
 
@@ -508,8 +539,7 @@ def converse(req: ThinkRequest):
     responses = []
 
     for pname in to_respond:
-        persona  = state.personas[pname]
-        voice    = state.voices.get(persona.voice, state.voices["default"])
+        persona = state.personas[pname]
 
         emit("inference", "")
 
@@ -517,20 +547,10 @@ def converse(req: ThinkRequest):
         llm_start = time.time()
         response = llm(persona, req.text)
         llm_duration = time.time() - llm_start
-        
+
         if response:
             print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")
-            emit_sal(pname, response)
-            speaking = True
-            try:
-                # Time speech synthesis
-                speak_start = time.time()
-                speak(response, voice.sample_file or "audio/bird-dream.wav")
-                speak_duration = time.time() - speak_start
-                print(f"Speech output triggered in {speak_duration:.2f}s")
-            finally:
-                speaking   = False
-                last_spoke = time.time()
+            say(pname, response)
         responses.append(response)
 
     total_duration = time.time() - start_time
