@@ -186,7 +186,7 @@
 
   #text-input::placeholder { color: var(--text-dim); }
 
-  /* ── state strip ── */
+  /* ── state strip: pipeline state, shown under the panels on every tab ── */
   #state-strip {
     padding: 10px 24px 14px;
     display: flex;
@@ -416,13 +416,6 @@
       <input id="text-input" type="text" placeholder="type here" autocomplete="off" spellcheck="false">
     </div>
 
-    <div id="state-strip">
-      <span id="state-hearing"      class="state-label">hearing</span>
-      <span id="state-transcribing" class="state-label">transcribing</span>
-      <span id="state-inference"    class="state-label">inference</span>
-      <span id="state-speaking"     class="state-label">speaking</span>
-    </div>
-
   </div>
 
   <div id="panel-logs" class="panel">
@@ -461,6 +454,13 @@
       <button id="setting-model-apply" class="test-btn">Apply</button>
     </div>
 
+  </div>
+
+  <div id="state-strip">
+    <span id="state-hearing"      class="state-label">hearing</span>
+    <span id="state-transcribing" class="state-label">transcribing</span>
+    <span id="state-inference"    class="state-label">inference</span>
+    <span id="state-speaking"     class="state-label">speaking</span>
   </div>
 
 </div>
