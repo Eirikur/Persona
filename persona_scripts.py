@@ -19,7 +19,8 @@ SCRIPT_TIMEOUT = 300   # seconds before a script that has not finished is killed
 
 # Name -> command line, run from the repo directory.
 SCRIPTS: dict[str, list[str]] = {
-    "stt_check": ["./persona_stt_check.py", "3"],
+    "stt_check":      ["./persona_stt_check.py", "3"],
+    "pipeline_check": ["./persona_pipeline_check.py"],
 }
 
 
