@@ -602,16 +602,20 @@
     return document.querySelector('.tab.active')?.dataset.tab;
   }
 
+  // Shows one tab. Used by a click on the tab bar, and by the hub when it
+  // wants the owner to see something (see the run_script event).
+  function showTab(name) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    tabByName[name].classList.remove('has-update');
+    for (const [panelName, panel] of Object.entries(panels)) {
+      panel.classList.toggle('active', panelName === name);
+    }
+    document.title = TAB_TITLES[name];
+    if (name === 'settings') loadSettings();
+  }
+
   tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.toggle('active', t === tab));
-      tab.classList.remove('has-update');
-      for (const [name, panel] of Object.entries(panels)) {
-        panel.classList.toggle('active', name === tab.dataset.tab);
-      }
-      document.title = TAB_TITLES[tab.dataset.tab];
-      if (tab.dataset.tab === 'settings') loadSettings();
-    });
+    tab.addEventListener('click', () => showTab(tab.dataset.tab));
   });
 
   // ── logs panel: every SSE event, shown as a plain scrolling list ──
@@ -732,6 +736,11 @@
         stateEls.inference.classList.remove('tool');
         stateEls.speaking.classList.remove('rendering', 'playing');
         setLive('hearing');
+      } else if (type === 'run_script') {
+        // The hub heard a spoken command that names a script (text is the
+        // script's name): show the Test tab and run it where it can be seen.
+        showTab('test');
+        runScriptLocked(text);
       }
     };
   }
@@ -775,12 +784,26 @@
     }
   }
 
-  document.querySelectorAll('.script-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      await runScript(btn.dataset.script);
-      btn.disabled = false;
-    });
+  const scriptButtons = document.querySelectorAll('.script-btn');
+  let scriptRunning   = false;
+
+  // Runs a script with every script button disabled, so a second run cannot
+  // be started from this page while one is going. Used by the buttons and by
+  // the hub's run_script event (a spoken command), so both behave the same.
+  async function runScriptLocked(name) {
+    if (scriptRunning) return;
+
+    scriptRunning = true;
+    scriptButtons.forEach(b => { b.disabled = true; });
+
+    await runScript(name);
+
+    scriptButtons.forEach(b => { b.disabled = false; });
+    scriptRunning = false;
+  }
+
+  scriptButtons.forEach(btn => {
+    btn.addEventListener('click', () => runScriptLocked(btn.dataset.script));
   });
 
   // A throwaway tool (persona_screenshot.sh) loads this same page with
