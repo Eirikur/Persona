@@ -87,8 +87,9 @@ command. To add a script: one line in `SCRIPTS`, one button with class
 
 - LLM replies arrive with leading `\n\n` (visible in the check's Reply line).
   Harmless so far; not investigated.
-- The live hub was found muted (HEARING struck through) on load: persisted
-  mute state, not a bug in this work.
+- The live hub was found muted (HEARING struck through) on load. The mute is
+  in-memory only (`MUTED` in `persona_hub.py`, starts False), so a restart
+  clears it. Not a bug in this work.
 - RealtimeSTT 1.1.2 prints harmless close-time tracebacks (`FasterWhisperEngine`
   has no `close`; a pipe read after close). The STT check silences all logging
   around `rec.shutdown()`; it reports with `print`.
