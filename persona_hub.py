@@ -41,6 +41,7 @@ SPEECH_OUTPUT_URL = "http://127.0.0.1:8402"
 SPEECH_INPUT_URL  = "http://127.0.0.1:8403"
 
 SPEAK_COOLDOWN  = 8.0
+SUMMARY_SPEAKER = "system"   # persona whose voice speaks script results (SAY: lines)
 SHUTDOWN_GRACE  = 2.0   # seconds to wait for a reload's SSE reconnect before really shutting down
 
 
@@ -254,8 +255,8 @@ def say(persona_name: str, text: str) -> None:
 
 
 def say_summary(text: str) -> None:
-    """Speak a script's SAY: line in the active persona's voice (Sal, until System has its own)."""
-    say(state.active_persona, text)
+    """Speak a script's SAY: line in SUMMARY_SPEAKER's voice, so Sal never reads out reports on herself."""
+    say(SUMMARY_SPEAKER, text)
     emit("speak_done", "")
 
 

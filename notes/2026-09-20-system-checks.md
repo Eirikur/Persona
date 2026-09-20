@@ -94,8 +94,9 @@ once and the live recorder is not held up.
 
 **Spoken results.** A script prints a line starting `SAY: `. After the script
 exits, the runner hands that text to `say_summary()` in the hub, which has the
-active persona (Sal, until System has its own voice) show and speak it. After,
-never during, so speaking cannot skew what was measured. `say()` is the one
+`system` persona (`SUMMARY_SPEAKER`) show and speak it in her own voice, so Sal
+never reads out reports on herself. After, never during, so speaking cannot skew
+what was measured. `say()` is the one
 place a reply gets shown, marked as speaking and given its cooldown, so the mic
 does not hear the summary and answer it. `converse()` uses the same `say()`.
 A run's stream (and so the buttons) stays busy until the summary has finished
@@ -112,6 +113,14 @@ adding phrases, test that the canned message still does not trigger.
 `playback`: `persona_speech_output.py` reports `playback_start` to the hub at
 8400 (hard-coded), so a test hub on 8499 sees those stages as "not seen" even
 when the speech was really spoken. Verify the passing path against the live hub.
+
+**System's voice.** `audio/system-voice.wav` is a prototype, copied from
+`~/Proj/Voices/be-careful.wav` (2.8 s, 16 kHz mono; Sal's `bird-dream.wav` is
+10.4 s, 44.1 kHz stereo, so a longer prompt may clone more steadily). It will be
+replaced: swap the file, no code change. The voice profile lives in
+`~/.config/persona/state.json` (`voices.system`, and `personas.system.voice`);
+that file is outside the repo, backed up first as `state.json.bak-2026-09-20`.
+Sal's voice and the `audio/bird-dream.wav` fallback were not touched.
 
 Spoken summaries cost render time too: about 11 words took 16 s. If that
 becomes annoying, shorten the `SAY:` text in the script, not the runner.
@@ -145,6 +154,7 @@ becomes annoying, shorten the `SAY:` text in the script, not the runner.
   each check appends one JSON line to a file; the tab reads it back.
 - A longer clip for finer latency resolution, only if needed. It is just
   another wav + txt pair and a `SCRIPTS` entry.
-- The system persona (Cissy) speaking these results in her own voice, instead
-  of Sal reading them (see `say_summary()`); needs the multi-persona work.
+- System (Cissy) answering as a full persona, not only reading results: she
+  has a voice now, but her LLM prompt is still "not yet defined", and how the
+  state strip should behave per persona is still an open design question.
 - Test-triggered input as its own persona (already bookmarked in memory).
