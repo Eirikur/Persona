@@ -55,6 +55,20 @@ COMMANDS: dict[str, str] = {
     "restart":     "~/Proj/Persona/persona_start.sh &> ~/Proj/Persona/persona.log",
 }
 
+# Spoken commands that run a script from SCRIPTS (persona_scripts.py). The chat
+# window is told to show the Test tab and run it there. Each phrase must be the
+# very START of the input, ignoring punctuation and case ("System, run test."
+# matches "system run test").
+#
+# Never use a phrase that appears inside the canned test message ("Sal, this is
+# a system test. Do you hear me?"): the pipeline check sends that text through
+# dispatch(), so a phrase that matched it would make the check start itself.
+SCRIPT_PHRASES: dict[str, str] = {
+    "system run test":          "pipeline_check",
+    "system check reply":       "pipeline_check",
+    "system check recognition": "stt_check",
+}
+
 # STT mishearing corrections. Applied to every input before dispatch.
 MISHEARINGS: dict[str, str] = {
     "emax":     "emacs",
@@ -228,11 +242,12 @@ def dispatch(text: str) -> list[str]:
     Routing order:
       1. Apply MISHEARINGS corrections
       2. "stop"            → interrupt speech, return []
-      3. COMMANDS match    → run shell command, return []
-      4. Quiet phrases     → switch to named mode, return []
-      5. BROADCAST_PHRASES → all loaded personas
-      6. Named mode → persona whose wake word matches, or []
-      7. Open mode  → all loaded personas
+      3. SCRIPT_PHRASES    → tell the chat window to run a script, return []
+      4. COMMANDS match    → run shell command, return []
+      5. Quiet phrases     → switch to named mode, return []
+      6. BROADCAST_PHRASES → all loaded personas
+      7. Named mode → persona whose wake word matches, or []
+      8. Open mode  → all loaded personas
     """
     global MODE
 
@@ -254,6 +269,16 @@ def dispatch(text: str) -> list[str]:
     if normalized.startswith("stop"):
         httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
         return []
+
+    # Drop punctuation so "System, run test." reads as "system run test".
+    not_a_word   = r"[^a-z0-9' ]+"
+    spoken_words = " ".join(re.sub(not_a_word, " ", normalized).split())
+
+    for phrase, script in SCRIPT_PHRASES.items():
+        if spoken_words.startswith(phrase):
+            print(f"script command: {script!r}")
+            emit("run_script", script)
+            return []
 
     for phrase, cmd in COMMANDS.items():
         if phrase in normalized:
