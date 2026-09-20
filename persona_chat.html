@@ -359,6 +359,19 @@
     align-self: flex-start;
   }
 
+  /* output of a script run from a .script-btn, filled in as it prints */
+  #script-output {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+  }
+
   .setting-row {
     display: flex;
     align-items: center;
@@ -422,8 +435,13 @@
   </div>
 
   <div id="panel-test" class="panel">
-    <p class="test-description">Fires a canned test message through the pipeline, the same as a real utterance.</p>
+    <p class="test-description">Sends a canned typed message through the hub, the LLM and speech output. Skips speech recognition.</p>
     <button id="test-btn" class="test-btn">Run test</button>
+
+    <p class="test-description">Plays a recorded clip into a separate recognizer and compares what it hears with what the clip says. Takes about 30 seconds.</p>
+    <button class="test-btn script-btn" data-script="stt_check">Check speech recognition</button>
+
+    <pre id="script-output"></pre>
   </div>
 
   <div id="panel-settings" class="panel">
@@ -721,6 +739,45 @@
       .then(r => r.json())
       .then(data => console.log('Test trigger:', data))
       .catch(e => console.error('Test trigger error:', e));
+  });
+
+  // Any button with class "script-btn" and data-script="<name>" runs that
+  // script on the hub (see SCRIPTS in persona_scripts.py) and shows its
+  // output here as it prints.
+  const scriptOutput = document.getElementById('script-output');
+
+  async function runScript(name) {
+    scriptOutput.textContent = '';
+
+    try {
+      const response = await fetch(`/run_script/${name}`, {method: 'POST'});
+
+      if (!response.ok) {
+        scriptOutput.textContent = `Could not run ${name}: ${response.status} ${response.statusText}\n`;
+        return;
+      }
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+
+        scriptOutput.textContent += decoder.decode(value, {stream: true});
+        scriptOutput.scrollTop = scriptOutput.scrollHeight;
+      }
+    } catch (e) {
+      scriptOutput.textContent += `\nLost the connection to the hub: ${e}\n`;
+    }
+  }
+
+  document.querySelectorAll('.script-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await runScript(btn.dataset.script);
+      btn.disabled = false;
+    });
   });
 
   // A throwaway tool (persona_screenshot.sh) loads this same page with
