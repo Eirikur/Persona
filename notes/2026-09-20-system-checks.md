@@ -26,13 +26,15 @@ Commits, in order: `10cfd98` strip on every tab, `dded7df` STT check,
 `run_script` event, `e2c00ce` `SCRIPT_PHRASES`, `b8b8847` spoken `SAY:` lines,
 `f9adf54` spoken STT summary.
 
-**The live hub must be restarted** (`./persona_restart.sh`) before the Test
-tab buttons and spoken commands work: `/run_script`, `SCRIPT_PHRASES` and
-`say()` are new. The route, tab and phrase wiring was tested against a
-throwaway second hub on port 8499. The pipeline check script itself was also
-run directly against the live hub (it passed, all stages seen, before the
-`SAY:` lines existed). The spoken *passing* summary has not yet been heard
-end to end on the live hub; see the testing caveat below.
+**Status at end of session (2026-09-20).** The live hub needed a restart
+(`./persona_restart.sh`) for the Test tab buttons and spoken commands:
+`/run_script`, `SCRIPT_PHRASES` and `say()` are new. The owner restarted and
+ran it: System spoke a result on the live hub. The route, tab and phrase wiring
+was tested first against a throwaway second hub on port 8499, and the pipeline
+check script itself was run directly against the live hub (it passed, all
+stages seen). Not confirmed: whether the numbers in a *passing* summary came
+through clearly, and the spoken command ("System, run test") by real voice has
+not been tried. Both are quick to check next session.
 
 ## Running them
 
@@ -121,6 +123,11 @@ replaced: swap the file, no code change. The voice profile lives in
 `~/.config/persona/state.json` (`voices.system`, and `personas.system.voice`);
 that file is outside the repo, backed up first as `state.json.bak-2026-09-20`.
 Sal's voice and the `audio/bird-dream.wav` fallback were not touched.
+
+Owner's verdict on hearing it live: the prototype was made by pasting a very
+short clip together three times, and Chatterbox does not render it well
+(understandable, not good). That is the prompt file, not the code. What is
+needed is a longer, cleaner, continuous clip (about 10 s worked for Sal).
 
 Spoken summaries cost render time too: about 11 words took 16 s. If that
 becomes annoying, shorten the `SAY:` text in the script, not the runner.
