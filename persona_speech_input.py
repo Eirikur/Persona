@@ -36,11 +36,16 @@ from contextlib import asynccontextmanager
 # CTranslate2 (faster-whisper) uses only 4 CPU threads unless told otherwise,
 # and RealtimeSTT does not pass cpu_threads through. It does honor
 # OMP_NUM_THREADS, but only if that is set before torch or ctranslate2 loads,
-# so this must stay above the imports below. 16 is this machine's physical core
-# count. Measured 2026-09-19 with large-v3-turbo on CPU: end of speech to text
-# went from 5.5 s to 3.9 s, and Chatterbox rendering was not slowed. See
-# notes/2026-09-19-realtimestt-servers-evaluation.md.
-os.environ.setdefault("OMP_NUM_THREADS", "16")
+# so this must stay above the imports below. Set to 16 (this machine's
+# physical core count) on 2026-09-19; measured 2026-09-22 that this starves
+# Chatterbox's CPU-bound rendering, which runs continuously in another
+# process while this one keeps decoding realtime partials on the mic --
+# render went from 0.61-0.74 s/word to 0.63-1.34 s/word. Dropped to 8, which
+# 2026-09-19's own table showed still gives a 4.24s recognition median (still
+# well under the pre-fix 4.99s baseline) while leaving more headroom for
+# Chatterbox. See notes/2026-09-19-realtimestt-servers-evaluation.md and
+# notes/2026-09-22-omp-threads-vs-chatterbox.md.
+os.environ.setdefault("OMP_NUM_THREADS", "8")
 
 import httpx
 import torch
