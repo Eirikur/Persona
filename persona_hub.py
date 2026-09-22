@@ -8,12 +8,14 @@
 # ]
 # ///
 
+
 """Persona Hub — voice assistant routing server.
 
 Merges speech and keyboard input, dispatches to personas, and serves the chat UI.
 Single input source feeds four destinations: system commands, shell commands,
 the active habitat (persona group), or a broadcast to all loaded personas.
 """
+
 
 import asyncio
 import json
@@ -142,6 +144,7 @@ def emit(event_type: str, text: str, **extra) -> None:
     data = json.dumps({"type": event_type, "text": text, **extra})
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
+
 
 
 def emit_sal(persona_name: str, text: str) -> None:
@@ -467,7 +470,7 @@ def set_provider(provider: str):
 def stop():
     """Interrupt current speech output."""
     httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0).raise_for_status()
-    
+
     return {"ok": True}
 
 
