@@ -181,6 +181,26 @@ def emit_mic_level(level: float) -> None:
 
 # ─── Attention Alerts ──────────────────────────────────────────────────────────
 
+def chat_window_focused() -> bool:
+    """
+    True if the Persona Chat window already has focus.
+
+    Checked via xdotool's active-window title rather than a window id, so
+    there's no id-format bookkeeping to get wrong. Any failure here (no
+    xdotool, no active window, X server hiccup) reports False rather than
+    raising, so a broken check just means an alert fires when it didn't
+    strictly need to -- never the other way around.
+    """
+    try:
+        name = subprocess.check_output(
+            ["xdotool", "getactivewindow", "getwindowname"],
+            stderr=subprocess.DEVNULL, timeout=1,
+        ).decode().strip()
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+    return name == CHAT_WINDOW_TITLE
+
+
 def raise_chat_window() -> None:
     """Bring the Persona Chat window to the front, via wmctrl (X11 only)."""
     if not RAISE_CHAT_WINDOW:
@@ -211,7 +231,9 @@ def notify_new_bubble(summary: str, body: str) -> None:
 
 
 def announce_bubble(summary: str, body: str) -> None:
-    """Run both attention alerts for a newly-added chat bubble."""
+    """Run both attention alerts for a newly-added chat bubble, unless the window already has focus."""
+    if chat_window_focused():
+        return
     raise_chat_window()
     notify_new_bubble(summary, body)
 
