@@ -316,26 +316,31 @@ def say_summary(text: str) -> None:
 
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
-def dispatch(text: str) -> list[str]:
+def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     """
-    Decide which loaded personas should respond to this input.
+    Decide which loaded personas should respond to this input, and whether
+    it should show up as a chat bubble at all.
 
-    Returns a list of persona names. Empty list = no response needed.
+    Returns (persona_names, show_bubble). persona_names is empty when no
+    response is needed. show_bubble is False only for voice input dropped
+    by the self-hear guard below, so Sal hearing her own voice doesn't
+    raise the chat window or fire a notification either.
 
-    Typed and voice input are gated identically: in named mode, the text
-    must start with a loaded persona's wake word (e.g. typing "salice ..."
+    Typed input always reaches full dispatch; in named mode it still must
+    start with a loaded persona's wake word (e.g. typing "salice ..."
     addresses just Sal), so that with several personas loaded, typing a
     plain sentence doesn't page all of them at once.
 
     Routing order:
       1. Apply MISHEARINGS corrections
-      2. "stop"            → interrupt speech, return []
-      3. SCRIPT_PHRASES    → tell the chat window to run a script, return []
-      4. COMMANDS match    → run shell command, return []
-      5. Quiet phrases     → switch to named mode, return []
-      6. BROADCAST_PHRASES → all loaded personas
-      7. Named mode → persona whose wake word matches, or []
-      8. Open mode  → all loaded personas
+      2. "stop"            → interrupt speech, return ([], True)
+      3. Self-hear guard (voice only) → drop entirely, return ([], False)
+      4. SCRIPT_PHRASES    → tell the chat window to run a script, return ([], True)
+      5. COMMANDS match    → run shell command, return ([], True)
+      6. Quiet phrases     → switch to named mode, return ([], True)
+      7. BROADCAST_PHRASES → all loaded personas
+      8. Named mode → persona whose wake word matches, or []
+      9. Open mode  → all loaded personas
     """
     global MODE
 
@@ -348,15 +353,24 @@ def dispatch(text: str) -> list[str]:
         pattern = r"\b" + re.escape(heard) + r"\b"
         normalized = re.sub(pattern, intended, normalized)
 
+    if normalized.startswith("stop"):
+        emit("heard", original)
+        httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
+        return [], True
+
+    # Sal's own voice reaching the mic while she's talking, or just after,
+    # would otherwise be free to trigger COMMANDS, scripts, or a reply to
+    # herself -- "stop" above is the one voice command that must still get
+    # through, so she can be interrupted by hand.
+    if not typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
+        print(f"ignored (self-hear): {normalized!r}")
+        return [], False
+
     emit("heard", original)
     if normalized != original:
         emit("corrected", normalized)
 
     print(f"[{MODE}] dispatch: {normalized!r}")
-
-    if normalized.startswith("stop"):
-        httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
-        return []
 
     # Drop punctuation so "System, run test." reads as "system run test".
     not_a_word   = r"[^a-z0-9' ]+"
@@ -366,24 +380,24 @@ def dispatch(text: str) -> list[str]:
         if spoken_words.startswith(phrase):
             print(f"script command: {script!r}")
             emit("run_script", script)
-            return []
+            return [], True
 
     for phrase, cmd in COMMANDS.items():
         if phrase in normalized:
             print(f"command: {cmd!r}")
             subprocess.Popen(cmd, shell=True)
-            return []
+            return [], True
 
     if "go quiet" in normalized or "be quiet" in normalized or "quiet mode" in normalized:
         MODE = "named"
         print("mode → named")
-        return []
+        return [], True
 
     loaded = state.loaded_personas
 
     for phrase in BROADCAST_PHRASES:
         if normalized.startswith(phrase):
-            return list(loaded)
+            return list(loaded), True
 
     if MODE == "named":
         for pname in loaded:
@@ -392,10 +406,10 @@ def dispatch(text: str) -> list[str]:
                 continue
             for ww in persona.wake_words:
                 if normalized.startswith(ww):
-                    return [pname]
-        return []
+                    return [pname], True
+        return [], True
 
-    return list(loaded)
+    return list(loaded), True
 
 
 # ─── API Routes ───────────────────────────────────────────────────────────────
@@ -576,7 +590,10 @@ def converse(req: ThinkRequest):
         return {"text": ""}
 
     start_time = time.time()
-    to_respond = dispatch(req.text)
+    to_respond, show_bubble = dispatch(req.text, req.typed)
+
+    if not show_bubble:
+        return {"text": ""}
 
     # Shown as a chat bubble regardless of whether any persona will answer,
     # so the owner can see what speech input heard even when nobody's named.
@@ -584,11 +601,6 @@ def converse(req: ThinkRequest):
     announce_bubble(req.speaker, req.text)
 
     if not to_respond:
-        emit("speak_done", "")
-        return {"text": ""}
-
-    if not req.typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
-        print(f"ignored (cooldown): {req.text!r}")
         emit("speak_done", "")
         return {"text": ""}
 
