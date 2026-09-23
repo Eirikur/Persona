@@ -129,6 +129,20 @@
   .message .provider.local  { color: var(--provider-local); }
   .message .provider.remote { color: var(--provider-remote); }
 
+  /* Voice-file drop target: outlined while a file hovers, then the ring pulses
+     green four times after a successful drop -- Chatterbox needs a few seconds
+     to ingest the new sample, and the pulses say "working on it". */
+  .message.sal .bubble { transition: outline-color 0.3s; outline: 2px solid transparent; }
+  .message.sal.drop-target .bubble  { outline-color: var(--provider-remote); }
+  .message.sal.voice-swapped .bubble {
+    animation: voice-pulse 0.9s ease-in-out 4;
+  }
+
+  @keyframes voice-pulse {
+    0%, 100% { outline-color: transparent; }
+    50%      { outline-color: var(--state-speaking); }
+  }
+
   .message .bubble {
     padding: 11px 16px;
     border-radius: var(--radius);
@@ -555,9 +569,10 @@
     });
   }
 
-  function addBubble(cls, speaker, text, provider, providerLocal) {
+  function addBubble(cls, speaker, text, provider, providerLocal, personaKey) {
     const msg = document.createElement('div');
     msg.className = `message ${cls}`;
+    if (personaKey) msg.dataset.persona = personaKey;
     const sp = document.createElement('span');
     sp.className = 'speaker';
     sp.textContent = speaker;
@@ -583,6 +598,48 @@
   function personaDisplayName(name) {
     return (!name || name === 'default') ? 'Sal' : name;
   }
+
+  // ── voice drop: drag a .wav from the desktop onto a persona's bubble ──
+  // The document-level handlers stop Chrome from navigating to (and playing)
+  // any file dropped on the window; only persona bubbles do anything with it.
+  function bubbleUnder(event) {
+    return event.target.closest('.message.sal');
+  }
+
+  document.addEventListener('dragover', e => {
+    e.preventDefault();
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    const msg = bubbleUnder(e);
+    if (msg) msg.classList.add('drop-target');
+  });
+
+  document.addEventListener('dragleave', e => {
+    if (e.relatedTarget === null) {
+      document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    }
+  });
+
+  document.addEventListener('drop', async e => {
+    e.preventDefault();
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+
+    const msg  = bubbleUnder(e);
+    const file = e.dataTransfer.files[0];
+    if (!msg || !file) return;
+
+    const persona = msg.dataset.persona;
+    const resp = await fetch(`/voice/${encodeURIComponent(persona)}`, {method: 'POST', body: file});
+    if (resp.ok) {
+      const result = await resp.json();
+      addLogLine('voice', `${persona} voice -> ${result.sample_file}`);
+      msg.classList.remove('voice-swapped');
+      void msg.offsetWidth;   // restart the animation if a drop lands mid-pulse
+      msg.classList.add('voice-swapped');
+      msg.addEventListener('animationend', () => msg.classList.remove('voice-swapped'), {once: true});
+    } else {
+      addLogLine('voice', `voice drop failed for ${persona}: ${resp.status}`);
+    }
+  });
 
   input.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
@@ -749,7 +806,7 @@
         stateEls.speaking.classList.add('rendering');
         stateEls.speaking.classList.remove('playing');
         setLive('speaking');
-        addBubble('sal', personaDisplayName(persona), text, provider, provider_local);
+        addBubble('sal', personaDisplayName(persona), text, provider, provider_local, persona);
       } else if (type === 'playback_start') {
         stateEls.speaking.classList.remove('rendering');
         stateEls.speaking.classList.add('playing');

@@ -26,12 +26,12 @@ import time
 import uvicorn
 import httpx
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from persona_schemas import Persona, load, save
+from persona_schemas import Persona, VoiceProfile, load, save
 from persona_scripts import SCRIPTS, script_output
 
 
@@ -63,6 +63,11 @@ NOTIFY_ON_BUBBLE   = True
 # UI shows local providers in plain text and remote ones in the highlight
 # color, so a glance says whether a reply left the box.
 LOCAL_PROVIDERS = ("ollama", "echo")
+
+# Voice samples dropped onto a bubble are saved here, one new file per drop,
+# so the original voice files are never overwritten and old drops stay
+# available to switch back to.
+DROPPED_VOICE_DIR = Path(__file__).parent / "audio" / "dropped"
 
 
 # ─── Dispatch Tables ──────────────────────────────────────────────────────────
@@ -562,6 +567,41 @@ def set_provider(provider: str):
     save(state)
     print(f"active persona {state.active_persona} provider → {provider}")
     return {"active_persona": state.active_persona, "provider": provider}
+
+
+@app.post("/voice/{persona_name}")
+async def set_voice(persona_name: str, request: Request):
+    """
+    Swap a persona's voice sample for the wav file in the request body.
+
+    The persona is not told: its next spoken reply simply comes out in the
+    new voice. Gets its own voice profile, so other personas sharing the
+    "default" voice are unaffected.
+    """
+    if persona_name not in state.personas:
+        raise HTTPException(status_code=404, detail="Unknown persona: " + persona_name)
+
+    body = await request.body()
+    if body[:4] != b"RIFF":
+        raise HTTPException(status_code=400, detail="Not a wav file")
+
+    DROPPED_VOICE_DIR.mkdir(parents=True, exist_ok=True)
+    stamp     = time.strftime("%Y%m%d-%H%M%S")
+    file_name = persona_name + "-" + stamp + ".wav"
+    (DROPPED_VOICE_DIR / file_name).write_bytes(body)
+
+    persona = state.personas[persona_name]
+    old     = state.voices.get(persona.voice, state.voices["default"])
+    state.voices[persona_name] = VoiceProfile(
+        name        = persona_name,
+        sample_file = "audio/dropped/" + file_name,
+        speed       = old.speed,
+    )
+    persona.voice = persona_name
+    save(state)
+
+    print(f"persona {persona_name} voice → audio/dropped/{file_name}")
+    return {"persona": persona_name, "sample_file": "audio/dropped/" + file_name}
 
 
 @app.post("/stop")
