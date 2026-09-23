@@ -33,6 +33,8 @@
     --text-muted:   #607080;
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
+    --provider-local:  #D0D8DF;   /* plain/white -- runs on this machine */
+    --provider-remote: #b8956a;   /* highlight -- left the box over the network */
     --state-live:     #C4CDD5;
     --state-active:   #b8956a;   /* "the LLM's area, in progress" -- tool call, or a reply waiting to be rendered into audio */
     --state-speaking: #5FAD6B;   /* audibly talking, right now */
@@ -115,6 +117,17 @@
 
   .message.sal .speaker { color: var(--accent-sal); opacity: 0.7; }
   .message.user .speaker { color: var(--accent-user); opacity: 0.7; text-align: right; }
+
+  .message .provider {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0 4px;
+    opacity: 0.7;
+  }
+
+  .message .provider.local  { color: var(--provider-local); }
+  .message .provider.remote { color: var(--provider-remote); }
 
   .message .bubble {
     padding: 11px 16px;
@@ -542,16 +555,24 @@
     });
   }
 
-  function addBubble(cls, speaker, text) {
+  function addBubble(cls, speaker, text, provider, providerLocal) {
     const msg = document.createElement('div');
     msg.className = `message ${cls}`;
     const sp = document.createElement('span');
     sp.className = 'speaker';
     sp.textContent = speaker;
+    msg.appendChild(sp);
+
+    if (provider) {
+      const pr = document.createElement('span');
+      pr.className = `provider ${providerLocal ? 'local' : 'remote'}`;
+      pr.textContent = provider;
+      msg.appendChild(pr);
+    }
+
     const bub = document.createElement('div');
     bub.className = 'bubble';
     bub.textContent = text;
-    msg.appendChild(sp);
     msg.appendChild(bub);
     conv.appendChild(msg);
     conv.scrollTop = conv.scrollHeight;
@@ -687,7 +708,7 @@
 
     es.onmessage = e => {
       const data = JSON.parse(e.data);
-      const {type, text, persona, level, speaker} = data;
+      const {type, text, persona, level, speaker, provider, provider_local} = data;
 
       // Fires ~10x/second while the mic is open -- handled separately so it
       // doesn't flood the log panel or the console. Inverted on purpose: at
@@ -728,7 +749,7 @@
         stateEls.speaking.classList.add('rendering');
         stateEls.speaking.classList.remove('playing');
         setLive('speaking');
-        addBubble('sal', personaDisplayName(persona), text);
+        addBubble('sal', personaDisplayName(persona), text, provider, provider_local);
       } else if (type === 'playback_start') {
         stateEls.speaking.classList.remove('rendering');
         stateEls.speaking.classList.add('playing');

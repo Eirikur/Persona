@@ -59,6 +59,11 @@ CHAT_WINDOW_TITLE  = "Persona Chat"   # must match <title> in persona_chat.html
 RAISE_CHAT_WINDOW  = True
 NOTIFY_ON_BUBBLE   = True
 
+# Providers that run on this machine rather than over the network -- the chat
+# UI shows local providers in plain text and remote ones in the highlight
+# color, so a glance says whether a reply left the box.
+LOCAL_PROVIDERS = ("ollama", "echo")
+
 
 # ─── Dispatch Tables ──────────────────────────────────────────────────────────
 
@@ -160,12 +165,18 @@ def emit(event_type: str, text: str, **extra) -> None:
 
 
 
-def emit_sal(persona_name: str, text: str) -> None:
+def emit_sal(persona_name: str, text: str, provider: str) -> None:
     """Push a persona response event to all connected SSE clients."""
     announce_bubble(persona_name, text)
     if not event_loop:
         return
-    data = json.dumps({"type": "sal_turn", "persona": persona_name, "text": text})
+    data = json.dumps({
+        "type":           "sal_turn",
+        "persona":        persona_name,
+        "text":           text,
+        "provider":       provider,
+        "provider_local": provider in LOCAL_PROVIDERS,
+    })
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
 
@@ -316,7 +327,7 @@ def say(persona_name: str, text: str) -> None:
     persona = state.personas[persona_name]
     voice   = state.voices.get(persona.voice, state.voices["default"])
 
-    emit_sal(persona_name, text)
+    emit_sal(persona_name, text, persona.provider)
     speaking = True
 
     try:
