@@ -46,6 +46,19 @@ SPEAK_COOLDOWN  = 8.0
 SUMMARY_SPEAKER = "system"   # persona whose voice speaks script results (SAY: lines)
 SHUTDOWN_GRACE  = 2.0   # seconds to wait for a reload's SSE reconnect before really shutting down
 
+# Every new chat bubble tries to get the owner's attention, so Persona doesn't
+# keep listening unnoticed behind other windows. Two independent alerts, each
+# safe to flip off on its own:
+#   - RAISE_CHAT_WINDOW uses wmctrl, which needs X11 -- it won't do anything
+#     useful under a native Wayland session.
+#   - NOTIFY_ON_BUBBLE uses notify-send (freedesktop.org desktop
+#     notifications over D-Bus), which works the same under X11 and Wayland,
+#     so it keeps alerting even if RAISE_CHAT_WINDOW quietly stops working
+#     after a future Wayland migration.
+CHAT_WINDOW_TITLE  = "Persona Chat"   # must match <title> in persona_chat.html
+RAISE_CHAT_WINDOW  = True
+NOTIFY_ON_BUBBLE   = True
+
 
 # ─── Dispatch Tables ──────────────────────────────────────────────────────────
 
@@ -149,6 +162,7 @@ def emit(event_type: str, text: str, **extra) -> None:
 
 def emit_sal(persona_name: str, text: str) -> None:
     """Push a persona response event to all connected SSE clients."""
+    announce_bubble(persona_name, text)
     if not event_loop:
         return
     data = json.dumps({"type": "sal_turn", "persona": persona_name, "text": text})
@@ -163,6 +177,43 @@ def emit_mic_level(level: float) -> None:
     data = json.dumps({"type": "mic_level", "level": level})
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
+
+
+# ─── Attention Alerts ──────────────────────────────────────────────────────────
+
+def raise_chat_window() -> None:
+    """Bring the Persona Chat window to the front, via wmctrl (X11 only)."""
+    if not RAISE_CHAT_WINDOW:
+        return
+
+    try:
+        subprocess.Popen(["wmctrl", "-R", CHAT_WINDOW_TITLE])
+    except FileNotFoundError:
+        print("raise_chat_window: wmctrl not found -- skipping")
+
+
+def notify_new_bubble(summary: str, body: str) -> None:
+    """
+    Pop a desktop notification for a new chat bubble.
+
+    Uses notify-send, which goes over the standard freedesktop.org D-Bus
+    notifications API -- unlike raise_chat_window, this keeps working
+    unchanged under Wayland, so it's the fallback that survives a future
+    desktop migration even if window-raising quietly stops working.
+    """
+    if not NOTIFY_ON_BUBBLE:
+        return
+
+    try:
+        subprocess.Popen(["notify-send", summary, body])
+    except FileNotFoundError:
+        print("notify_new_bubble: notify-send not found -- skipping")
+
+
+def announce_bubble(summary: str, body: str) -> None:
+    """Run both attention alerts for a newly-added chat bubble."""
+    raise_chat_window()
+    notify_new_bubble(summary, body)
 
 
 @app.get("/events")
@@ -530,6 +581,7 @@ def converse(req: ThinkRequest):
     # Shown as a chat bubble regardless of whether any persona will answer,
     # so the owner can see what speech input heard even when nobody's named.
     emit("user_turn", req.text, speaker=req.speaker)
+    announce_bubble(req.speaker, req.text)
 
     if not to_respond:
         emit("speak_done", "")
