@@ -31,6 +31,7 @@
     --text-sal:     #D0D8DF;
     --text-dim:     #4A5A68;
     --text-muted:   #607080;
+    --text-info:    #8FA0AE;   /* model and voice on the bubble info line */
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
     --provider-local:  #D0D8DF;   /* plain/white -- runs on this machine */
@@ -107,24 +108,39 @@
   .message.sal { align-self: flex-start; }
   .message.user { align-self: flex-end; }
 
+  /* Bubble header, two lines: the persona name, then an info line with
+     model, voice, and provider. Tight line-height so the small text does
+     not inherit the body's roomy 1.6. */
+  .message .header {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0 4px;
+    line-height: 1.3;
+  }
+
+  .message.user .header { align-items: flex-end; }
+
   .message .speaker {
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    text-transform: capitalize;
     color: var(--text-muted);
-    padding: 0 4px;
   }
 
-  .message.sal .speaker { color: var(--accent-sal); opacity: 0.7; }
-  .message.user .speaker { color: var(--accent-user); opacity: 0.7; text-align: right; }
+  .message.sal .speaker { color: var(--accent-sal); }
+  .message.user .speaker { color: var(--accent-user); text-align: right; }
 
-  .message .provider {
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 0 4px;
-    opacity: 0.7;
+  .message .info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 8px;
+    font-size: 11px;
+    letter-spacing: 0.03em;
   }
+
+  .message .detail { color: var(--text-info); }
 
   .message .provider.local  { color: var(--provider-local); }
   .message .provider.remote { color: var(--provider-remote); }
@@ -569,20 +585,48 @@
     });
   }
 
-  function addBubble(cls, speaker, text, provider, providerLocal, personaKey) {
+  // info is optional -- persona bubbles pass {model, voice, provider, providerLocal}
+  // and the user's bubbles pass nothing. The header shows the name followed
+  // by whichever of model, voice, and provider are known.
+  function addBubble(cls, speaker, text, info, personaKey) {
     const msg = document.createElement('div');
     msg.className = `message ${cls}`;
     if (personaKey) msg.dataset.persona = personaKey;
+
+    const header = document.createElement('div');
+    header.className = 'header';
+    msg.appendChild(header);
+
     const sp = document.createElement('span');
     sp.className = 'speaker';
     sp.textContent = speaker;
-    msg.appendChild(sp);
+    header.appendChild(sp);
 
-    if (provider) {
-      const pr = document.createElement('span');
-      pr.className = `provider ${providerLocal ? 'local' : 'remote'}`;
-      pr.textContent = provider;
-      msg.appendChild(pr);
+    if (info) {
+      const line = document.createElement('div');
+      line.className = 'info';
+      header.appendChild(line);
+
+      if (info.model) {
+        const md = document.createElement('span');
+        md.className = 'detail model';
+        md.textContent = info.model;
+        line.appendChild(md);
+      }
+
+      if (info.voice) {
+        const vc = document.createElement('span');
+        vc.className = 'detail voice';
+        vc.textContent = info.voice;
+        line.appendChild(vc);
+      }
+
+      if (info.provider) {
+        const pr = document.createElement('span');
+        pr.className = `provider ${info.providerLocal ? 'local' : 'remote'}`;
+        pr.textContent = info.provider;
+        line.appendChild(pr);
+      }
     }
 
     const bub = document.createElement('div');
@@ -597,6 +641,11 @@
   // maps a key to what the user should actually see.
   function personaDisplayName(name) {
     return (!name || name === 'default') ? 'Sal' : name;
+  }
+
+  // Bubbles have room for the full name; the roster strip does not.
+  function personaBubbleName(name) {
+    return (!name || name === 'default') ? 'Salice' : name;
   }
 
   // ── voice drop: drag a .wav from the desktop onto a persona's bubble ──
@@ -765,7 +814,7 @@
 
     es.onmessage = e => {
       const data = JSON.parse(e.data);
-      const {type, text, persona, level, speaker, provider, provider_local} = data;
+      const {type, text, persona, level, speaker, provider, provider_local, model, voice} = data;
 
       // Fires ~10x/second while the mic is open -- handled separately so it
       // doesn't flood the log panel or the console. Inverted on purpose: at
@@ -806,7 +855,9 @@
         stateEls.speaking.classList.add('rendering');
         stateEls.speaking.classList.remove('playing');
         setLive('speaking');
-        addBubble('sal', personaDisplayName(persona), text, provider, provider_local, persona);
+        addBubble('sal', personaBubbleName(persona), text,
+                  {model: model, voice: voice, provider: provider, providerLocal: provider_local},
+                  persona);
       } else if (type === 'playback_start') {
         stateEls.speaking.classList.remove('rendering');
         stateEls.speaking.classList.add('playing');

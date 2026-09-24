@@ -31,7 +31,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from persona_schemas import Persona, VoiceProfile, load, save
+from persona_schemas import DEFAULT_MODELS, Persona, VoiceProfile, load, save
 from persona_scripts import SCRIPTS, script_output
 
 
@@ -68,6 +68,9 @@ LOCAL_PROVIDERS = ("ollama", "echo")
 # so the original voice files are never overwritten and old drops stay
 # available to switch back to.
 DROPPED_VOICE_DIR = Path(__file__).parent / "audio" / "dropped"
+
+# Sample used when a voice profile names no file of its own.
+DEFAULT_VOICE_SAMPLE = "audio/bird-dream.wav"
 
 
 # ─── Dispatch Tables ──────────────────────────────────────────────────────────
@@ -170,7 +173,17 @@ def emit(event_type: str, text: str, **extra) -> None:
 
 
 
-def emit_sal(persona_name: str, text: str, provider: str) -> None:
+def effective_model(persona: Persona) -> str:
+    """The model this persona's replies come from: its own setting, else its provider's default. Empty for echo."""
+    return persona.model or DEFAULT_MODELS.get(persona.provider, "")
+
+
+def voice_label(voice: VoiceProfile) -> str:
+    """The voice's sample file name without directory or extension, as shown on the bubble."""
+    return Path(voice.sample_file or DEFAULT_VOICE_SAMPLE).stem
+
+
+def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str) -> None:
     """Push a persona response event to all connected SSE clients."""
     announce_bubble(persona_name, text)
     if not event_loop:
@@ -181,6 +194,8 @@ def emit_sal(persona_name: str, text: str, provider: str) -> None:
         "text":           text,
         "provider":       provider,
         "provider_local": provider in LOCAL_PROVIDERS,
+        "model":          model,
+        "voice":          voice,
     })
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
@@ -332,13 +347,13 @@ def say(persona_name: str, text: str) -> None:
     persona = state.personas[persona_name]
     voice   = state.voices.get(persona.voice, state.voices["default"])
 
-    emit_sal(persona_name, text, persona.provider)
+    emit_sal(persona_name, text, persona.provider, effective_model(persona), voice_label(voice))
     speaking = True
 
     try:
         # Time speech synthesis
         speak_start = time.time()
-        speak(text, voice.sample_file or "audio/bird-dream.wav")
+        speak(text, voice.sample_file or DEFAULT_VOICE_SAMPLE)
         speak_duration = time.time() - speak_start
         print(f"Speech output triggered in {speak_duration:.2f}s")
     finally:

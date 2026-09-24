@@ -31,6 +31,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from persona_schemas import DEFAULT_MODELS
 from persona_tools import TOOLS
 
 load_dotenv()
@@ -45,12 +46,13 @@ MAX_TOOL_ROUNDS = 3   # safety valve against a model that never stops calling to
 
 # Real providers: (base_url, env var holding the API key, default model).
 # "echo" is handled separately below -- it never reaches this table.
+# Default models live in persona_schemas.DEFAULT_MODELS.
 PROVIDERS = {
-    "ollama":     ("http://localhost:11434/v1",  None,               "gemma3:12b"),
-    "openai":     (None,                         "OPENAI_API_KEY",   "gpt-4o-mini"),
-    "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "qwen-3.8-27b"),
-    "perplexity": ("https://api.perplexity.ai",  "PPLX_API_KEY",     "sonar"),
-    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "google/gemini-2.0-flash-001"),
+    "ollama":     ("http://localhost:11434/v1",  None,               DEFAULT_MODELS["ollama"]),
+    "openai":     (None,                         "OPENAI_API_KEY",   DEFAULT_MODELS["openai"]),
+    "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", DEFAULT_MODELS["cerebras"]),
+    "perplexity": ("https://api.perplexity.ai",  "PPLX_API_KEY",     DEFAULT_MODELS["perplexity"]),
+    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", DEFAULT_MODELS["openrouter"]),
 }
 
 
