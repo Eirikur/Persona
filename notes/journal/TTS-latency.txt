@@ -1,0 +1,1063 @@
+ ▐▛███▛█   Claude Code v2.1.283
+▝▜██████▀  Sonnet 5 · Claude Pro
+ ▝▝   ▝▝   ~/Proj/Persona
+
+
+❯ Hi, I'm hoping to move toward multi-persona in a day or two, but I still get  
+  confused pretty often by latency caused (I think) by longer speeches being    
+  rendered by Chatterbox. I had some ideas, and I'll ask for yours. I have the  
+  meta-idea that we could add a different TTS parallel to Chatterbox. I have    
+  not tried the qwen STT models, but Kolja added them to RealtimeTTS, there's a 
+  CPU-only option there, too. Note: I'm sticking with voice-cloning options     
+  because of the great audio from Chatterbox and because a workflow of tweaking 
+  the input audio sample is natural to me. Coqui is also there in RealTimeTTS.  
+  Coqui (was Mozilla Speech) was my first speech output that satisfied me. It   
+  has voice-cloning now. Can you look at those two options? I'm probably going  
+  to stay with Chatterbox, but a high performance option would be nice. I don't 
+  know what's up with Coqui. That project crashed dead at one point. Since I'm  
+  not thinking of really switching, I'm not afraid of trying it. Tell me what   
+  you think. I think if I can get confused now, I'll accept less-ideal output   
+  speech.                                                                       
+
+● I'll read our latency note and the ROCm note, and load the web tools so I can
+  check both projects.
+
+  Read 2 files (ctrl+o to expand)
+
+● Fetch(https://github.com/KoljaB/RealtimeTTS)
+  ⎿  Received 381.6KB (200 OK)
+
+● Web Search("Qwen3-TTS voice cloning CPU inference speed real-time factor")
+  ⎿  Did 1 search in 7s
+
+● Web Search("Coqui XTTS-v2 idiap coqui-tts fork maintained voice cloning CPU
+            speed 2026")
+  ⎿  Did 1 search in 7s
+
+  Listed 1 directory (ctrl+o to expand)
+
+● The web results conflict on CPU speed, so I'll check the local RealtimeTTS
+  checkout, which has the actual engine code.
+
+● Bash(cd ~/Proj/RealtimeTTS 2>/dev/null && git log -1 --format='%h %ad %s' &&
+      ls RealtimeTTS/engines | head -50; grep -rli "qwen" --include=*.py
+      --include=*.md --incl…)
+  ⎿  c3c0ed7 Sun Aug 30 03:59:23 2026 +0200 Release RealtimeTTS 0.8.3
+     azure_engine.py
+     base_engine.py
+     … +56 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+  Read 2 files (ctrl+o to expand)
+
+● Bash(cd ~/Proj/RealtimeTTS && grep -n -i
+      "cpu\|gguf\|onnx\|llama\|rocm\|hip\|vulkan\|model_id\|Qwen3-TTS-"
+      RealtimeTTS/engines/qwen_engine.py | head -70; echo ---; s…)
+  ⎿  27:DEFAULT_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+     266:        model_id: str = DEFAULT_MODEL,
+     323:        self.model_id = model_id
+     … +73 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● I'll check whether QwenCpuEngine exists here, since the docs only guarantee
+  CUDA for Qwen, and also look into Coqui and other CPU voice-cloning engines. 
+  · summary
+
+● Bash(cd ~/Proj/RealtimeTTS && grep -rn "QwenCpu" --include=*.py --include=*.md
+      . | head; echo ---; sed -n 170,200p README.md; echo ---; ls docs/engines;
+      echo ---; gr…)
+  ⎿  ---
+     | --- | --- | --- | --- |
+     | **[`QwenEngine`](docs/engines/qwen.md) (recommended)** | Local nativ
+     … +67 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● QwenCpuEngine isn't in your local checkout at all. I'll read the Coqui and
+  PocketTTS docs before I answer.
+
+● Bash(cd ~/Proj/RealtimeTTS/docs/engines && sed -n 1,60p coqui.md; echo =====;
+      sed -n 1,50p pockettts.md; echo =====; grep -n -i
+      "cpu\|speed\|latency\|licen" neutts.m…)
+  ⎿  # Coqui Engine
+
+     `CoquiEngine` wraps Coqui XTTS for local neural TTS and voice cloning.
+     … +112 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● I'd try both, but only as standalone benchmark scripts, and I wouldn't change
+  the stack yet. You wrote "Qwen STT", but I assume you meant Qwen3-TTS, so
+  that's what I looked at. I read the docs and source in your ~/Proj/RealtimeTTS
+  checkout (0.8.3). I have not run either engine.
+
+  Qwen3-TTS
+
+  - Cloning: It does voice cloning two ways. The x-vector mode takes just a
+    sample. The ICL mode gives closer cloning but needs the exact transcript of
+    the reference clip. That adds a step to your tweak-the-sample workflow.
+  - Streaming: It streams audio in about 80 ms frames, which is the kind of
+    time-to-first-sound fix you're after. The 81 ms onset and 0.108 RTF in the
+    README were measured on an RTX 4090.
+  - CPU: Their own docs say CPU realtime performance is not a supported
+    guarantee. A CPU build is only "a locally built wheel is possible".
+  - AMD: They list AMD/Vulkan as not part of the supported release. The
+    underlying ggml library has a Vulkan backend, so a Strix Halo build might
+    work, but I found no evidence anyone has done it.
+  - QwenCpuEngine: The GitHub page summary mentioned it, but it doesn't exist
+    anywhere in your 0.8.3 checkout. Treat it as unverified until we see it in a
+    release.
+  - Other CPU numbers: A blog claims 3–5x slower than real time on CPU. That is
+    probably the PyTorch reference model, not this 0.6B quantized build, so it
+    doesn't settle anything either way.
+  - Licenses: The model and the runtime are Apache/MIT.
+
+  Coqui (XTTS-v2)
+
+  - Maintenance: The original company shut down in 2024, but Idiap maintains a
+    fork as the coqui-tts package. Version 0.27.5 came out in January 2026, so
+    it's alive. RealtimeTTS's CoquiEngine is built on it.
+  - Cloning: It clones from a short WAV with no transcript, so it fits your
+    workflow best.
+  - CPU: It runs on CPU and streams chunks. Its speed on this box is unknown,
+    and I'd guess it's the same order of magnitude as Chatterbox, not a big win.
+  - Quality: I'd expect it to sound worse than Chatterbox.
+  - License: The weights are non-commercial only (CPML). That's the same kind of
+    question as your 2026-09-23-voice-sample-legal.md, so it's fine for private
+    use.
+  - AMD: The CPU path doesn't touch ROCm, so it's the lowest-risk install of the
+    two.
+
+  PocketTTS
+
+  You didn't ask about this one. It's a small English-only model built for CPU,
+  and it does voice cloning from a WAV. It's the only engine in that list
+  designed for exactly your constraint. I haven't looked at its quality.
+
+  What I'd do
+
+  1. Chunking first. Your idea 2 in notes/2026-09-24-latency-ideas.md is cheap
+     and needs no new engine. It fixes the "did it hear me?" confusion because
+     sound starts after the first sentence.
+  2. Then a benchmark script outside the stack. It would be a standalone uv run
+     script that renders the same three sentences with your Sal sample. It would
+     report time-to-first-audio and seconds per word for Chatterbox, then
+     Coqui, then PocketTTS. Qwen would come last, since it needs a native build
+     and the transcript step. That gives real numbers on this machine, and I'd
+     save the WAVs so you can judge the sound.
+  3. Only then think about a second engine. Adding one behind
+     persona_speech_output.py for multi-persona (say, a fast engine for
+     secondary personas) is a design decision for after the numbers.
+
+  Do you want me to write the benchmark script, starting with Coqui and
+  PocketTTS? I'd add nothing to the stack and change no services.
+
+  Sources:
+  - RealtimeTTS
+  - Qwen3-TTS
+  - Qwen3-TTS voice cloning guide
+  - idiap/coqui-ai-TTS
+  - coqui-tts on PyPI
+  - coqui/XTTS-v2 on Hugging Face
+
+✻ Cogitated for 57s · done 9:45 AM
+
+❯ I say do your 1,2,3 idea there. Sounds good. Thanks for finding PocketTTS.    
+
+● Starting with step 1, chunking. First I'll check the repo state and read say()
+  and the speech-output service.
+
+● Bash(git status --short && git branch --show-current && ls && grep -n "def
+      say\|def speak\|speaking\|/speak\|playback_start" persona_hub.py | head
+      -40; wc -l persona…)
+  ⎿  ?? audio/dropped/
+     ?? notes/2026-09-23-voice-sample-legal.md
+     ?? tools-chat-session.txt
+     … +59 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● I'll chunk audio generation in persona_speech_output.py, rendering the next
+  sentence while the current one plays since sd.play() doesn't block—first
+  checking Chatterbox's generate() behavior and whether the speech services are
+  live. · summary
+
+● Bash((ss -ltnp 2>/dev/null | grep -E ":840[0-3]" ; echo "--- procs"; pgrep -af
+      "persona_" | cut -c1-120); echo "--- chatterbox src"; f=$(find
+      ~/.cache/uv -path "*cha…)
+  ⎿  --- procs
+     68055 /bin/bash -c source /home/eh/.claude/shell-snapshots/snapshot-ba
+     sh-1790430284378-a1jm85.sh 2>/dev/null || true &&
+     … +36 lines (ctrl+o to expand)
+
+● Bash(sed -n 320,365p persona_hub.py; cat
+      notes/2026-09-22-omp-threads-vs-chatterbox.md | head -50)
+  ⎿          "tools":         persona.tools,
+         })
+         r.raise_for_status()
+     … +93 lines (ctrl+o to expand)
+
+● Since services are down, I can test speech output directly. I found that voice
+  conditioning only needs to be passed on the first chunk (later chunks reuse
+  it), and sd.play()'s non-blocking nature lets rendering and playback overlap
+  naturally without threads—I'll get a second opinion on this design before
+  coding. · summary
+
+● Advising using Fable 5.1  ⎿  ✔ Advisor has reviewed the conversation and will apply the feedback
+
+● The advice matches my plan, and it adds two things I'd missed: a before-number
+  from the unchanged file, and a check that nothing parses the s/word log line.
+  I'll do both now.
+
+● Bash(grep -rn "s/word\|speech-out.log\|render" --include=*.py --include=*.sh
+      --include=*.html . 2>/dev/null | grep -v "^./#" | grep -v
+      "persona_speech_output.py" | h…)
+  ⎿  persona_speech_input.py:41:# Chatterbox's CPU-bound rendering, which r
+     uns continuously in another
+     persona_speech_input.py:43:# render went from 0.61-0.74 s/word to 0.63
+     … +37 lines (ctrl+o to expand)
+
+● The s/word line isn't parsed anywhere, but the pipeline check's render stage
+  already spans sal_turn to playback_start, so it'll reflect the faster first
+  sound automatically. I'll now take the baseline on the unchanged file. 
+  · summary
+
+● Bash(systemctl --user is-active persona-speech-out.service
+      persona-speech-in.service; SP=/tmp/claude-1000/-home-eh-Proj-Persona/24def
+      0d4-3bab-490e-a7a6-deb698699612/…)
+  ⎿  inactive
+     inactive
+     INFO:     Waiting for application startup.
+     … +3 lines (ctrl+o to expand)
+
+● The service is up. I'll send a four-sentence reply, about 40 words, which is a
+  typical long answer.
+
+● Bash(SP=/tmp/claude-1000/-home-eh-Proj-Persona/24def0d4-3bab-490e-a7a6-deb6986
+      99612/scratchpad; cat > $SP/longtext.json <<'EOF'
+      {"text": "Sure, I can explain that. T…)
+  ⎿  {
+       "ok": true,
+       "elapsed": 23.847824811935425,
+     … +5 lines (ctrl+o to expand)
+
+● Baseline: 23.8s to first sound, 35.8s total for a 49-word reply, with
+  rendering at 0.49 s/word vs 0.24 s/word playback—chunking should cut
+  first-sound time to ~5-6s. I'll stop the baseline service and build the
+  splitter as a standalone pure file so step 2's benchmark can reuse it. 
+  · summary
+
+● Bash(pkill -f persona_speech_output.py; sleep 1; pgrep -af
+      persona_speech_output || echo stopped)
+  ⎿  Error: Exit code 144
+
+● Write(persona_text_chunks.py)
+  ⎿  Wrote 63 lines to persona_text_chunks.py
+      1 """Split a reply into chunks that can be rendered and played one 
+      2 
+      3 Chatterbox renders slower than real time on this machine, so the 
+        speech
+        he next chunk
+      5 while the first one plays. Sound starts after one chunk's render 
+      6 of the whole reply's.
+      7 
+      8 This file has no model or audio code, so it can be tested on its 
+      9 """
+     … +66 lines (ctrl+o to expand)
+
+● The Bash call exited with code 144, probably because pkill -f matched its own
+  shell. I'll check whether the service is actually stopped.
+
+● Bash(pgrep -af "persona_speech_output" | cut -c1-100 || true; ss -ltn | grep
+      -c ":8402" || true)
+  ⎿  68390 /bin/bash -c source /home/eh/.claude/shell-snapshots/snapshot-ba
+     sh-1790430284378-a1jm85.sh 2>/
+     0
+
+● The service is stopped, and the only match was my own shell. Next I'll test
+  the splitter on its own, including the awkward cases.
+
+● Bash(python3 - <<'EOF'
+      from persona_text_chunks import split_into_chunks…)
+  ⎿  long reply
+        [23] Sure, I can explain that. The hub receives your speech, decide
+     s where it should go, and hands the reply to the speech service.
+     … +15 lines (ctrl+o to expand)
+
+● Setting the minimum word count to 4 instead of 8 fixes the latency issue—short
+  openers can now stand alone while single words like "Yes." still merge
+  properly. Moving on to edit the service now. · summary
+
+● Bash(python3 - <<'EOF'
+      import re…)
+  ⎿   persona_speech_output.py | 82 ++++++++++++++++++++++++++++++++++++++-
+     ---------
+      1 file changed, 65 insertions(+), 17 deletions(-)
+     … +16 lines (ctrl+o to expand)
+
+● The edit is in. Now the same 49-word request against the changed service, so
+  the numbers are comparable to the baseline.
+
+● Bash(SP=/tmp/claude-1000/-home-eh-Proj-Persona/24def0d4-3bab-490e-a7a6-deb6986
+      99612/scratchpad; (nohup ./persona_speech_output.py > $SP/chunked.log 2>&1
+      &); for i in…)
+  ⎿  {
+       "ok": true,
+       "elapsed": 33.70171594619751,
+     … +16 lines (ctrl+o to expand)
+
+● The first sound now starts at 5.45s instead of 23.85s, though total wall time
+  and per-word cost didn't improve — chunk timings suggest a fixed ~3s cost per
+  generate() call plus ~0.45s/word. I'll revisit that, but first verify that
+  /stop correctly skips remaining chunks since that path is new. · summary
+
+● Bash(SP=/tmp/claude-1000/-home-eh-Proj-Persona/24def0d4-3bab-490e-a7a6-deb6986
+      99612/scratchpad; : > $SP/mark; before=$(wc -l < $SP/chunked.log);
+      s=$(date +%s.%N); (c…)
+  ⎿  {"ok":true} <- stop sent at 9.020391019 s
+     speak returned after 16.937284525 s
+     [1]+  Done                    ( curl -s -X POST http://127.0.0.1:8402/
+     … +12 lines (ctrl+o to expand)
+
+● /stop works as expected—chunks 3 and 4 never rendered, and the in-flight chunk
+  2 render finished but wasn't played, consistent with prior findings. I'll
+  stop the test service and log these results in the handoff note. · summary
+
+● Bash(pkill -f "[p]ersona_speech_output.py"; sleep 1; ss -ltn | grep -c ":8402"
+      || true)
+  ⎿  0
+
+● Bash(cat >> notes/2026-09-24-latency-ideas.md <<'EOF'…)
+  ⎿  0d55696 Render and play replies in sentence chunks so sound starts soo
+     ner
+     ?? audio/dropped/
+     … +2 lines (ctrl+o to expand)
+
+● Step 1 is committed (0d55696). Moving to step 2 (benchmark scripts) — I'll
+  first check disk space given the tight root filesystem, then locate Sal's
+  voice sample and review the existing test script layout. · summary
+
+● Bash(df -h / /home /tmp 2>/dev/null; echo ---; python3 - <<'EOF'
+      import json, os…)
+  ⎿  Filesystem      Size  Used Avail Use% Mounted on
+     /dev/nvme0n1p2  3.6T  2.5T  990G  72% /
+     /dev/nvme0n1p2  3.6T  2.5T  990G  72% /
+     … +83 lines (ctrl+o to expand)
+
+● Plenty of disk space (990 GB free), and I've confirmed Sal's voice sample is
+  audio/bird-dream.wav, which every engine will clone. Now I'll check how
+  RealtimeTTS's own wrappers call the Coqui and PocketTTS libraries rather than
+  guessing their APIs. · summary
+
+● Bash(cd ~/Proj/RealtimeTTS && grep -n "pocket_tts\|TTSModel\|get_state_for\|ge
+      nerate_audio\|sample_rate\|load_model\|stream"
+      RealtimeTTS/engines/pocket_engine.py | h…)  ⎿  30:def _patch_pocket_tts_serial_streaming(TTSModel) -> None:
+     33:    PocketTTS' public streaming path creates a fresh decoder worker
+      thread for
+     … +122 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● I'll structure this with a shared helper plus three per-engine scripts, each
+  in its own uv environment—handling PocketTTS's gated HF weights (with silent
+  fallback avoided) and Coqui's license prompt (left for you to accept). The
+  helper renders whole and chunked audio, saves both WAVs, and simulates
+  playback to measure the silence-after-first-sound duration causing your
+  confusion. · summary
+
+● Write(tests/tts_bench_common.py)
+  ⎿  Wrote 126 lines to tests/tts_bench_common.py
+      1 """Shared pieces for the TTS benchmark scripts (tts_bench_*.py).
+      2 
+      3 Each engine script loads its model, prepares Sal's voice sample o
+      4 hands run_benchmark() a function that turns text into audio. This
+         file renders
+      5 the same reply twice, whole and in chunks, times it, saves both a
+        s WAV files
+      7 
+      8 Nothing here touches the running Persona services.
+      9 """
+     … +145 lines (ctrl+o to expand)
+
+● Write(tests/tts_bench_chatterbox.py)
+  ⎿  Wrote 60 lines to tests/tts_bench_chatterbox.py
+       1 #!/usr/bin/env -S uv run --script
+       2 # /// script
+       3 # requires-python = ">=3.11,<3.12"
+       4 # dependencies = [
+       5 #    "setuptools<81",
+       6 #    "numpy",
+       7 #    "soundfile",
+       8 #    "torch",
+       9 #    "torchaudio",
+      10 #    "chatterbox-tts>=0.1.5",
+     … +58 lines (ctrl+o to expand)
+
+● Write(tests/tts_bench_coqui.py)
+  ⎿  Wrote 49 lines to tests/tts_bench_coqui.py
+       1 #!/usr/bin/env -S uv run --script
+       2 # /// script
+       3 # requires-python = ">=3.11,<3.12"
+       4 # dependencies = [
+       5 #    "setuptools<81",
+       6 #    "numpy",
+       7 #    "soundfile",
+       8 #    "torch",
+       9 #    "torchaudio",
+      10 #    "coqui-tts",
+     … +48 lines (ctrl+o to expand)
+
+● Write(tests/tts_bench_pocket.py)
+  ⎿  Wrote 52 lines to tests/tts_bench_pocket.py
+       1 #!/usr/bin/env -S uv run --script
+       2 # /// script
+       3 # requires-python = ">=3.11,<3.12"
+       4 # dependencies = [
+       5 #    "setuptools<81",
+       6 #    "numpy",
+       7 #    "soundfile",
+       8 #    "torch",
+       9 #    "pocket-tts",
+      10 # ]
+     … +51 lines (ctrl+o to expand)
+
+❯ File space? I'm seeing 1TB free?                                              
+
+● Disk space checks out fine—root has 990GB free (72% used) with plenty of room
+  despite the earlier August 100% issue. Now running the Chatterbox baseline
+  script to verify the shared helper works, starting with the playback
+  arithmetic test. · summary
+
+● Bash(cd /home/eh/Proj/Persona/tests && python3 - <<'EOF'
+      # Feed the simulator the four chunk timings measured on 2026-09-26 and…)
+  ⎿  first 5.45  silence 19.13  done 36.34
+
+● The simulator's 36.3s prediction closely matches the measured 37.2s and
+  reveals about 19s of hidden silence in the chunk gaps. Next I'll look at the
+  Chatterbox baseline script. · summary
+
+● Bash(chmod +x tts_bench_*.py && SP=/tmp/claude-1000/-home-eh-Proj-Persona/24de
+      f0d4-3bab-490e-a7a6-deb698699612/scratchpad && ./tts_bench_chatterbox.py >
+      $SP/bench_ch…)
+  ⎿  Installed 124 packages in 85ms
+     Warning: You are sending unauthenticated requests to the HF Hub. Pleas
+     e set a HF_TOKEN to enable higher rate limits and faster downloads.
+     … +22 lines (ctrl+o to expand)
+
+● The helper works end to end—Chatterbox's whole-reply first sound varied
+  run-to-run (28.9s vs 23.9s earlier), while chunked first sound was 5.5s with
+  ~19s of gap silence. Moving on to test PocketTTS, which needs no license
+  prompt. · summary
+
+● Bash(SP=/tmp/claude-1000/-home-eh-Proj-Persona/24def0d4-3bab-490e-a7a6-deb6986
+      99612/scratchpad && ./tts_bench_pocket.py > $SP/bench_pocket.log 2>&1;
+      grep -v "Warning…)
+  ⎿  Downloading numpy (16.1MiB)
+     Downloading triton (236.5MiB)
+     Downloading torch (528.9MiB)
+     … +27 lines (ctrl+o to expand)
+
+● PocketTTS runs about 10x faster than Chatterbox (0.06 s/word vs. 0.6–0.8) with
+  gapless streaming, but this test used the built-in "alba" voice since cloning
+  requires Kyutai's gated weights—so voice matching for Sal still needs
+  verification. Next I'll check whether the Coqui script installs and reaches
+  the license prompt, though I can't accept that prompt on your behalf. 
+  · summary
+
+● Bash(SP=/tmp/claude-1000/-home-eh-Proj-Persona/24def0d4-3bab-490e-a7a6-deb6986
+      99612/scratchpad && timeout 500 ./tts_bench_coqui.py < /dev/null >
+      $SP/bench_coqui.log…)
+  ⎿  exit 1
+     Installed 114 packages in 101ms
+     Traceback (most recent call last):
+     … +18 lines (ctrl+o to expand)
+
+● This is a dependency mismatch, not a license issue. The installed transformers
+  is too new for coqui-tts. I'll check the versions and pin.
+
+● Bash(cd /home/eh/.cache/uv/environments-v2/tts-bench-coqui-*/lib/python3.11/si
+      te-packages && ls -d transformers-* coqui_tts-* torch-* 2>/dev/null; grep
+      -i "^Requires…)
+  ⎿  coqui_tts-0.27.5.dist-info
+     torch-2.14.0.dist-info
+     transformers-5.17.0.dist-info
+     … +3 lines (ctrl+o to expand)
+
+● Found the issue: coqui-tts's unbounded transformers>=4.57 let uv install 5.17,
+  which removed the needed function. I'll pin transformers below version 5
+  (aiming for 4.57.6) and retry. · summary
+
+● Update(tests/tts_bench_coqui.py)
+  ⎿  Added 1 line
+       8  #    "torch",
+       9  #    "torchaudio",
+      10  #    "coqui-tts",
+      11 +#    "transformers>=4.57,<5",                                  
+      12  # ]
+      13  # ///
+      14  
+
+● Bash(cd /home/eh/Proj/Persona/tests && SP=/tmp/claude-1000/-home-eh-Proj-Perso
+      na/24def0d4-3bab-490e-a7a6-deb698699612/scratchpad && timeout 500
+      ./tts_bench_coqui.py…)
+  ⎿  exit 1
+     Installed 3 packages in 18ms
+     Traceback (most recent call last):
+     … +14 lines (ctrl+o to expand)
+
+● The import error names the fix, the codec extra. I'll use it.
+
+● Bash(sed -i 's/#    "coqui-tts",/#    "coqui-tts[codec]",/' tts_bench_coqui.py
+      && grep -n "coqui-tts" tts_bench_coqui.py | head -2;
+      SP=/tmp/claude-1000/-home-eh-Proj…)
+  ⎿  10:#    "coqui-tts[codec]",
+     exit 1
+         model_path, config_path, vocoder_path, vocoder_config_path, model_
+     … +16 lines (ctrl+o to expand)
+
+● The Coqui script now runs through install and import, stopping correctly at
+  the license prompt for your input — the flagged change was just my sed edit
+  adding the codec extra. I'll log these results and commit the scripts. 
+  · summary
+
+● Bash(cd /home/eh/Proj/Persona && cat >> notes/2026-09-24-latency-ideas.md
+      <<'EOF'…)
+  ⎿  611b59f Add standalone TTS benchmark scripts for Chatterbox, Coqui XTT
+     S and PocketTTS
+     0d55696 Render and play replies in sentence chunks so sound starts soo
+     … +13 lines (ctrl+o to expand)
+
+● Steps 1 and 2 are committed (0d55696, 611b59f). Chunking works when tested
+  against the speech service directly, but I haven't tried it in the full stack
+  or listened to how the chunk joins sound. Only Chatterbox and PocketTTS have
+  been benchmarked so far, and PocketTTS used its built-in "alba" voice, not
+  Sal's. The Coqui benchmark is waiting on a license prompt only you can answer.
+
+  Step 1: chunking
+
+  The speech service now renders a reply sentence by sentence, starts playing
+  the first piece, and renders the next piece while it plays. Sentences under 4
+  words are merged into the next one. The hub is unchanged.
+
+  ┌─────────────────┬────────┬─────────┐
+  │  49-word reply  │ before │ chunked │
+  ├─────────────────┼────────┼─────────┤
+  │ First sound     │ 23.9 s │ 5.5 s   │
+  ├─────────────────┼────────┼─────────┤
+  │ Request to done │ 35.8 s │ 37.2 s  │
+  └─────────────────┴────────┴─────────┘
+
+  - Total time: Each render call has a fixed cost of about 3 s, so total time is
+    about the same.
+  - Gaps: Rendering is still slower than speaking, so there's a long gap between
+    chunks. The benchmark simulation puts it at about 19 s of silence spread
+    across the gaps.
+  - Confusion: This fixes "did it hear me?", but a reply now sounds like a short
+    opener, a pause, then the rest.
+  - Voice: Splitting could change how Sal sounds at sentence joins, and I
+    haven't listened for it. Listen to ~/tts-bench/chatterbox/whole.wav against
+    chunked.wav. Setting CHUNK_MIN_WORDS = 1000 in persona_speech_output.py
+    turns chunking off.
+  - Stop: /stop now skips the chunks not yet played.
+
+  Step 2: benchmark scripts
+
+  The scripts in tests/tts_bench_*.py use Sal's sample, save both WAVs, and
+  simulate playback. Each has its own environment and doesn't touch the stack.
+
+  ┌────────────────────┬─────────────────┬───────────────────┬──────────────┐
+  │       engine       │  first sound,   │ silence between   │ request to   │
+  │                    │     chunked     │      chunks       │     done     │
+  ├────────────────────┼─────────────────┼───────────────────┼──────────────┤
+  │ Chatterbox         │ 5.5 s           │ 19.1 s            │ 40.9 s       │
+  ├────────────────────┼─────────────────┼───────────────────┼──────────────┤
+  │ PocketTTS (alba    │ 0.39 s          │ 0 s               │ 14.6 s       │
+  │ voice)             │                 │                   │              │
+  └────────────────────┴─────────────────┴───────────────────┴──────────────┘
+
+  PocketTTS renders at 0.06 s/word against Chatterbox's 0.6–0.8, so it renders
+  faster than it speaks and chunks never gap. I haven't heard its output yet,
+  and it may not clone Sal's voice well.
+
+  What you need to do
+
+  1. PocketTTS cloning: Accept the terms at huggingface.co/kyutai/pocket-tts,
+     then run uvx hf auth login and ./tests/tts_bench_pocket.py.
+  2. Coqui: Run ! ./tests/tts_bench_coqui.py. It asks you to accept Coqui's
+     non-commercial license, and I didn't want to accept that for you. The
+     script installs and reaches that prompt, but the rendering calls after it
+     are untested.
+  3. Listen: Play the WAVs in ~/tts-bench/.
+
+  Stop the speech services first, so they don't compete for CPU.
+
+  Step 3: a second engine
+
+  I'd wait for your listening results before designing anything. If PocketTTS
+  clones well enough, it would be a "fast voice" tier for secondary personas,
+  with Chatterbox kept for Sal. That would also make multi-persona replies much
+  cheaper.
+
+  Whether that's worth it depends on whether PocketTTS's voice quality is
+  acceptable to you, and I can't judge that.
+
+  Two smaller ideas, neither built:
+  - A small first chunk with larger later chunks, to pay the 3 s cost fewer
+    times.
+  - Finding out where that 3 s goes inside Chatterbox's generate().
+
+✻ Worked for 10m 45s · done 9:57 AM
+
+!  ./tests/tts_bench_coqui.py                                                     ⎿  /home/eh/.cache/uv/environments-v2/tts-bench-coqui-4790ed86d1199b3a/li
+     b/python3.11/site-packages/torch/jit/_script.py:1491: FutureWarning: `
+     torch.jit.script` is deprecated. Please switch to `torch.compile` or `
+     … +32 lines (ctrl+o to expand)
+
+● My instruction was wrong. The ! prefix runs the command without an interactive
+  stdin, so the license question got an immediate EOF instead of reaching you.
+  The script itself is fine.
+
+  You can answer the question in either of two ways:
+
+  - Separate terminal: Run ./tests/tts_bench_coqui.py in an ordinary terminal
+    and type y at the prompt.
+  - From here: Run ! COQUI_TOS_AGREED=1 ./tests/tts_bench_coqui.py. That
+    environment variable is Coqui's own way to pre-answer the prompt. It counts
+    as you accepting the non-commercial CPML terms shown above, so I'm not going
+    to set it on your behalf.
+
+  Either way the model downloads once, roughly 2 GB, and then the benchmark
+  runs. This will be the first real test of the xtts.inference calls, so paste
+  any error and I'll fix the script.
+
+  Stop the speech services first (systemctl --user stop persona-speech-out 
+  persona-speech-in). Before the license prompt was answered, nothing was
+  rendered, so no timing has been affected yet.
+
+✻ Churned for 12s · done 9:58 AM
+
+!  COQUI_TOS_AGREED=1 ./tests/tts_bench_coqui.py                                
+  ⎿  /home/eh/.cache/uv/environments-v2/tts-bench-coqui-4790ed86d1199b3a/lib/pyt
+     hon3.11/site-packages/torch/jit/_script.py:1491: FutureWarning:
+     `torch.jit.script` is deprecated. Please switch to `torch.compile` or
+     `torch.export`.
+       warnings.warn(
+     Loading XTTS-v2 on CPU...
+
+       0%|          | 0.00/1.87G [00:00<?, ?iB/s]
+       0%|          | 759k/1.87G [00:00<04:06, 7.58MiB/s]
+       1%|          | 10.4M/1.87G [00:00<00:30, 60.0MiB/s]
+       1%|          | 19.1M/1.87G [00:00<00:25, 72.0MiB/s]
+       2%|▏         | 32.6M/1.87G [00:00<00:18, 96.8MiB/s]
+       2%|▏         | 44.3M/1.87G [00:00<00:17, 104MiB/s]
+       3%|▎         | 56.1M/1.87G [00:00<00:16, 109MiB/s]
+       4%|▎         | 67.8M/1.87G [00:00<00:16, 112MiB/s]
+       4%|▍         | 79.6M/1.87G [00:00<00:15, 113MiB/s]
+       5%|▍         | 91.3M/1.87G [00:00<00:15, 115MiB/s]
+       6%|▌         | 103M/1.87G [00:01<00:15, 116MiB/s]
+       6%|▌         | 115M/1.87G [00:01<00:15, 116MiB/s]
+       7%|▋         | 127M/1.87G [00:01<00:14, 117MiB/s]
+       7%|▋         | 138M/1.87G [00:01<00:15, 113MiB/s]
+       8%|▊         | 150M/1.87G [00:01<00:15, 114MiB/s]
+       9%|▊         | 162M/1.87G [00:01<00:14, 115MiB/s]
+       9%|▉         | 174M/1.87G [00:01<00:14, 116MiB/s]
+      10%|▉         | 185M/1.87G [00:01<00:14, 116MiB/s]
+      11%|█         | 197M/1.87G [00:01<00:14, 117MiB/s]
+      11%|█         | 209M/1.87G [00:01<00:14, 117MiB/s]
+      12%|█▏        | 221M/1.87G [00:02<00:14, 117MiB/s]
+      12%|█▏        | 232M/1.87G [00:02<00:13, 117MiB/s]
+      13%|█▎        | 244M/1.87G [00:02<00:13, 117MiB/s]
+      14%|█▎        | 256M/1.87G [00:02<00:14, 114MiB/s]
+      14%|█▍        | 268M/1.87G [00:02<00:13, 115MiB/s]
+      15%|█▍        | 279M/1.87G [00:02<00:13, 116MiB/s]
+      16%|█▌        | 291M/1.87G [00:02<00:13, 116MiB/s]
+      16%|█▌        | 303M/1.87G [00:02<00:13, 117MiB/s]
+      17%|█▋        | 315M/1.87G [00:02<00:13, 117MiB/s]
+      17%|█▋        | 326M/1.87G [00:02<00:13, 117MiB/s]
+      18%|█▊        | 338M/1.87G [00:03<00:13, 117MiB/s]
+      19%|█▊        | 350M/1.87G [00:03<00:12, 117MiB/s]
+      19%|█▉        | 362M/1.87G [00:03<00:12, 117MiB/s]
+      20%|█▉        | 373M/1.87G [00:03<00:13, 114MiB/s]
+      21%|██        | 385M/1.87G [00:03<00:12, 115MiB/s]
+      21%|██        | 397M/1.87G [00:03<00:12, 116MiB/s]
+      22%|██▏       | 409M/1.87G [00:03<00:12, 116MiB/s]
+      23%|██▎       | 420M/1.87G [00:03<00:12, 117MiB/s]
+      23%|██▎       | 432M/1.87G [00:03<00:12, 117MiB/s]
+      24%|██▍       | 444M/1.87G [00:03<00:12, 117MiB/s]
+      24%|██▍       | 456M/1.87G [00:04<00:12, 117MiB/s]
+      25%|██▌       | 467M/1.87G [00:04<00:11, 117MiB/s]
+      26%|██▌       | 479M/1.87G [00:04<00:11, 117MiB/s]
+      26%|██▋       | 491M/1.87G [00:04<00:12, 114MiB/s]
+      27%|██▋       | 503M/1.87G [00:04<00:11, 115MiB/s]
+      28%|██▊       | 515M/1.87G [00:04<00:11, 116MiB/s]
+      28%|██▊       | 526M/1.87G [00:04<00:11, 116MiB/s]
+      29%|██▉       | 538M/1.87G [00:04<00:11, 117MiB/s]
+      29%|██▉       | 550M/1.87G [00:04<00:11, 117MiB/s]
+      30%|███       | 562M/1.87G [00:04<00:11, 117MiB/s]
+      31%|███       | 573M/1.87G [00:05<00:11, 117MiB/s]
+      31%|███▏      | 585M/1.87G [00:05<00:10, 117MiB/s]
+      32%|███▏      | 597M/1.87G [00:05<00:10, 117MiB/s]
+      33%|███▎      | 609M/1.87G [00:05<00:11, 114MiB/s]
+      33%|███▎      | 620M/1.87G [00:05<00:10, 115MiB/s]
+      34%|███▍      | 632M/1.87G [00:05<00:10, 116MiB/s]
+      34%|███▍      | 644M/1.87G [00:05<00:10, 116MiB/s]
+      35%|███▌      | 656M/1.87G [00:05<00:10, 117MiB/s]
+      36%|███▌      | 667M/1.87G [00:05<00:10, 117MiB/s]
+      36%|███▋      | 679M/1.87G [00:05<00:10, 117MiB/s]
+      37%|███▋      | 691M/1.87G [00:06<00:10, 117MiB/s]
+      38%|███▊      | 703M/1.87G [00:06<00:09, 117MiB/s]
+      38%|███▊      | 714M/1.87G [00:06<00:09, 117MiB/s]
+      39%|███▉      | 726M/1.87G [00:06<00:09, 114MiB/s]
+      40%|███▉      | 738M/1.87G [00:06<00:09, 115MiB/s]
+      40%|████      | 750M/1.87G [00:06<00:09, 116MiB/s]
+      41%|████      | 761M/1.87G [00:06<00:09, 116MiB/s]
+      41%|████▏     | 773M/1.87G [00:06<00:09, 117MiB/s]
+      42%|████▏     | 785M/1.87G [00:06<00:09, 117MiB/s]
+      43%|████▎     | 797M/1.87G [00:06<00:09, 117MiB/s]
+      43%|████▎     | 808M/1.87G [00:07<00:09, 117MiB/s]
+      44%|████▍     | 820M/1.87G [00:07<00:08, 117MiB/s]
+      45%|████▍     | 832M/1.87G [00:07<00:08, 117MiB/s]
+      45%|████▌     | 844M/1.87G [00:07<00:08, 114MiB/s]
+      46%|████▌     | 855M/1.87G [00:07<00:08, 115MiB/s]
+      46%|████▋     | 867M/1.87G [00:07<00:08, 116MiB/s]
+      47%|████▋     | 879M/1.87G [00:07<00:08, 116MiB/s]
+      48%|████▊     | 891M/1.87G [00:07<00:08, 117MiB/s]
+      48%|████▊     | 903M/1.87G [00:07<00:08, 117MiB/s]
+      49%|████▉     | 914M/1.87G [00:07<00:08, 117MiB/s]
+      50%|████▉     | 926M/1.87G [00:08<00:08, 117MiB/s]
+      50%|█████     | 938M/1.87G [00:08<00:07, 117MiB/s]
+      51%|█████     | 950M/1.87G [00:08<00:07, 117MiB/s]
+      51%|█████▏    | 961M/1.87G [00:08<00:07, 114MiB/s]
+      52%|█████▏    | 973M/1.87G [00:08<00:07, 115MiB/s]
+      53%|█████▎    | 985M/1.87G [00:08<00:07, 116MiB/s]
+      53%|█████▎    | 997M/1.87G [00:08<00:07, 116MiB/s]
+      54%|█████▍    | 1.01G/1.87G [00:08<00:07, 115MiB/s]
+      55%|█████▍    | 1.02G/1.87G [00:08<00:07, 117MiB/s]
+      55%|█████▌    | 1.03G/1.87G [00:08<00:07, 117MiB/s]
+      56%|█████▌    | 1.04G/1.87G [00:09<00:07, 117MiB/s]
+      57%|█████▋    | 1.06G/1.87G [00:09<00:06, 117MiB/s]
+      57%|█████▋    | 1.07G/1.87G [00:09<00:06, 117MiB/s]
+      58%|█████▊    | 1.08G/1.87G [00:09<00:06, 114MiB/s]
+      58%|█████▊    | 1.09G/1.87G [00:09<00:06, 115MiB/s]
+      59%|█████▉    | 1.10G/1.87G [00:09<00:06, 116MiB/s]
+      60%|█████▉    | 1.11G/1.87G [00:09<00:06, 116MiB/s]
+      60%|██████    | 1.13G/1.87G [00:09<00:06, 117MiB/s]
+      61%|██████    | 1.14G/1.87G [00:09<00:06, 117MiB/s]
+      62%|██████▏   | 1.15G/1.87G [00:09<00:06, 117MiB/s]
+      62%|██████▏   | 1.16G/1.87G [00:10<00:06, 117MiB/s]
+      63%|██████▎   | 1.17G/1.87G [00:10<00:09, 70.7MiB/s]
+      63%|██████▎   | 1.19G/1.87G [00:10<00:08, 80.3MiB/s]
+      64%|██████▍   | 1.20G/1.87G [00:10<00:07, 88.7MiB/s]
+      65%|██████▍   | 1.21G/1.87G [00:10<00:06, 95.8MiB/s]
+      65%|██████▌   | 1.22G/1.87G [00:10<00:06, 101MiB/s]
+      66%|██████▌   | 1.23G/1.87G [00:10<00:06, 106MiB/s]
+      67%|██████▋   | 1.24G/1.87G [00:11<00:05, 109MiB/s]
+      67%|██████▋   | 1.26G/1.87G [00:11<00:05, 111MiB/s]
+      68%|██████▊   | 1.27G/1.87G [00:11<00:05, 113MiB/s]
+      68%|██████▊   | 1.28G/1.87G [00:11<00:07, 80.9MiB/s]
+      69%|██████▉   | 1.29G/1.87G [00:11<00:06, 89.3MiB/s]
+      70%|██████▉   | 1.30G/1.87G [00:11<00:05, 96.2MiB/s]
+      70%|███████   | 1.31G/1.87G [00:11<00:05, 102MiB/s]
+      71%|███████   | 1.33G/1.87G [00:11<00:05, 106MiB/s]
+      72%|███████▏  | 1.34G/1.87G [00:11<00:04, 109MiB/s]
+      72%|███████▏  | 1.35G/1.87G [00:12<00:04, 112MiB/s]
+      73%|███████▎  | 1.36G/1.87G [00:12<00:04, 113MiB/s]
+      73%|███████▎  | 1.37G/1.87G [00:12<00:04, 115MiB/s]
+      74%|███████▍  | 1.38G/1.87G [00:12<00:04, 104MiB/s]
+      75%|███████▍  | 1.40G/1.87G [00:12<00:04, 116MiB/s]
+      76%|███████▌  | 1.41G/1.87G [00:12<00:03, 116MiB/s]
+      76%|███████▌  | 1.42G/1.87G [00:12<00:03, 117MiB/s]
+      77%|███████▋  | 1.44G/1.87G [00:12<00:03, 117MiB/s]
+      77%|███████▋  | 1.45G/1.87G [00:12<00:03, 117MiB/s]
+      78%|███████▊  | 1.46G/1.87G [00:12<00:03, 117MiB/s]
+      79%|███████▊  | 1.47G/1.87G [00:13<00:03, 117MiB/s]
+      79%|███████▉  | 1.48G/1.87G [00:13<00:03, 117MiB/s]
+      80%|███████▉  | 1.49G/1.87G [00:13<00:03, 117MiB/s]
+      81%|████████  | 1.51G/1.87G [00:13<00:03, 112MiB/s]
+      81%|████████▏ | 1.52G/1.87G [00:13<00:03, 116MiB/s]
+      82%|████████▏ | 1.53G/1.87G [00:13<00:02, 115MiB/s]
+      83%|████████▎ | 1.54G/1.87G [00:13<00:02, 112MiB/s]
+      83%|████████▎ | 1.55G/1.87G [00:13<00:02, 113MiB/s]
+      84%|████████▍ | 1.56G/1.87G [00:13<00:02, 115MiB/s]
+      84%|████████▍ | 1.58G/1.87G [00:14<00:02, 115MiB/s]
+      85%|████████▌ | 1.59G/1.87G [00:14<00:02, 116MiB/s]
+      86%|████████▌ | 1.60G/1.87G [00:14<00:02, 117MiB/s]
+      86%|████████▋ | 1.61G/1.87G [00:14<00:02, 117MiB/s]
+      87%|████████▋ | 1.62G/1.87G [00:14<00:02, 113MiB/s]
+      88%|████████▊ | 1.64G/1.87G [00:14<00:02, 114MiB/s]
+      88%|████████▊ | 1.65G/1.87G [00:14<00:01, 115MiB/s]
+      89%|████████▉ | 1.66G/1.87G [00:14<00:01, 116MiB/s]
+      89%|████████▉ | 1.67G/1.87G [00:14<00:01, 116MiB/s]
+      90%|█████████ | 1.68G/1.87G [00:15<00:02, 80.5MiB/s]
+      91%|█████████ | 1.69G/1.87G [00:15<00:01, 88.9MiB/s]
+      91%|█████████▏| 1.71G/1.87G [00:15<00:01, 95.9MiB/s]
+      92%|█████████▏| 1.72G/1.87G [00:15<00:01, 91.1MiB/s]
+      93%|█████████▎| 1.73G/1.87G [00:15<00:01, 107MiB/s]
+      93%|█████████▎| 1.74G/1.87G [00:15<00:01, 69.2MiB/s]
+      94%|█████████▍| 1.75G/1.87G [00:15<00:01, 78.7MiB/s]
+      95%|█████████▍| 1.77G/1.87G [00:16<00:01, 87.1MiB/s]
+      95%|█████████▌| 1.78G/1.87G [00:16<00:00, 94.3MiB/s]
+      96%|█████████▌| 1.79G/1.87G [00:16<00:00, 100MiB/s]
+      96%|█████████▋| 1.80G/1.87G [00:16<00:00, 105MiB/s]
+      97%|█████████▋| 1.81G/1.87G [00:16<00:00, 104MiB/s]
+      98%|█████████▊| 1.83G/1.87G [00:16<00:00, 108MiB/s]
+      98%|█████████▊| 1.84G/1.87G [00:16<00:00, 111MiB/s]
+      99%|█████████▉| 1.85G/1.87G [00:16<00:00, 113MiB/s]
+     100%|█████████▉| 1.86G/1.87G [00:16<00:00, 114MiB/s]
+     100%|██████████| 1.87G/1.87G [00:16<00:00, 110MiB/s]
+
+     0.00iB [00:00, ?iB/s]
+     4.37kiB [00:00, 17.3MiB/s]
+
+     0.00iB [00:00, ?iB/s]
+     361kiB [00:00, 32.0MiB/s]
+
+       0%|          | 0.00/32.0 [00:00<?, ?iB/s]
+     100%|██████████| 32.0/32.0 [00:00<00:00, 185kiB/s]
+
+       0%|          | 0.00/7.75M [00:00<?, ?iB/s]
+       8%|▊         | 630k/7.75M [00:00<00:01, 6.29MiB/s]
+     100%|██████████| 7.75M/7.75M [00:00<00:00, 41.8MiB/s]
+     The text length exceeds the character limit of 250 for language 'en', this
+     might cause truncated audio: sure, i can explain that. the hub receives
+     your sp...
+     Voice sample prepared once in 0.16 s
+
+     === coqui-xtts ===
+       warm-up render (not counted): 1.38 s
+       whole:  1 chunk(s)
+         first sound       34.27 s
+         silence after      0.00 s   (gaps between chunks)
+         request to done   57.76 s
+         render            34.27 s   (0.70 s/word, 1.46x the speech length)
+         speech length     23.49 s
+       chunked:  4 chunk(s)
+         first sound        2.84 s
+         silence after      8.74 s   (gaps between chunks)
+         request to done   28.18 s
+         render            23.70 s   (0.48 s/word, 1.43x the speech length)
+         speech length     16.60 s
+
+       WAVs to listen to: /home/eh/tts-bench/coqui-xtts/
+
+● The Coqui numbers are in. One caveat: XTTS warned that the text exceeds its
+  250-character limit and "might cause truncated audio". That explains why the
+  whole render produced 23.5 s of speech against 16.6 s when chunked. So the
+  whole-reply row isn't a fair comparison. I'll record the results in the note.
+
+● Bash(python3 - <<'EOF'
+      path = "notes/2026-09-24-latency-ideas.md"…)
+  ⎿  4f84163 Record Coqui XTTS benchmark results in the latency note
+     PocketTTS renders at about 0.06 s/word against Chatterbox's 0.6-0.8, a
+     nd is
+     … +24 lines (ctrl+o to expand)
+
+❯ Not sure what my next action is.                                              
+
+● A stale sentence in the note contradicts the Coqui result, so I'm fixing that
+  first. Then I'll answer.
+
+● Bash(python3 - <<'EOF'
+      path = "notes/2026-09-24-latency-ideas.md"…)
+  ⎿  2bfcd75 Drop stale Coqui setup sentences from the latency note
+     /home/eh/tts-bench/chatterbox:
+     chunked.wav
+     … +12 lines (ctrl+o to expand)
+
+● Your next action is to listen. It takes about five minutes, and everything
+  else depends on what you hear. Here are the commands, in the order I'd play
+  them:
+
+  ! paplay ~/tts-bench/chatterbox/whole.wav
+  ! paplay ~/tts-bench/chatterbox/chunked.wav
+  ! paplay ~/tts-bench/coqui-xtts/chunked.wav
+  ! paplay ~/tts-bench/pocket-tts/chunked.wav
+
+  What to listen for:
+
+  1. Chatterbox whole against chunked: Does the join between sentences sound
+     wrong? This decides whether the chunking I already committed stays. The
+     WAVs skip the silent gaps, so they show only prosody.
+  2. Coqui chunked: Is it good enough to consider, given it's about 1.6x faster
+     than Chatterbox but still slower than real time?
+  3. PocketTTS: This is the built-in "alba" voice, not Sal's. Ask whether the
+     engine sounds acceptable, not whether it sounds like Sal.
+
+  Then there are three possible outcomes:
+
+  - Chatterbox chunked sounds fine: Nothing else is needed. Chunking is
+    committed, and it takes effect the next time the stack starts, because the
+    speech services are currently stopped. Restart with ./persona_start.sh.
+  - The joins bother you: Tell me. The likely fix is CHUNK_MIN_WORDS = 1000 to
+    turn chunking off, or a larger first chunk.
+  - PocketTTS sounds promising: The one remaining step is accepting Kyutai's
+    terms at huggingface.co/kyutai/pocket-tts and running ! uvx hf auth login.
+    Then ! ./tests/tts_bench_pocket.py will use Sal's sample, and we'll hear
+    whether it clones well enough.
+
+  If you're tired, just do the two Chatterbox files and leave the rest for
+  another day. Everything is committed and written up in
+  notes/2026-09-24-latency-ideas.md, so nothing is lost.
+
+✻ Brewed for 1m 59s · done 10:00 AM
+
+❯ Didn't understand "do the first two files"                                    
+
+● I meant the first two lines of the four commands, the two Chatterbox ones:
+
+  ! paplay ~/tts-bench/chatterbox/whole.wav
+  ! paplay ~/tts-bench/chatterbox/chunked.wav
+
+  Type or paste each line into the prompt, one at a time. Each plays one
+  recording of the same reply, about 15 seconds. The first is the reply rendered
+  in one piece, the way it worked before today. The second is the reply
+  rendered in sentence chunks, the way it works now.
+
+  Listen for whether the second one sounds different in a way you dislike,
+  especially where one sentence ends and the next begins. If they sound the same
+  to you, chunking is fine and there's nothing more to do.
+
+  The other two lines (Coqui and PocketTTS) can wait for another day.
+
+✻ Churned for 3s · done 10:01 AM
+
+❯ very nice test idea. Yes, I'm still slow today. Happy, though!                
+
+● Glad it worked, and there's no hurry. Everything is committed and written up,
+  so nothing depends on today.
+
+  The memory index still lists your latency ideas as "not built", which is now
+  wrong. I'm updating it so the next session starts from the right place.
+
+  Recalled 1 memory, wrote 1 memory (ctrl+o to expand)
+
+● Bash(cd /home/eh/.claude/projects/-home-eh-Proj-Persona/memory && sed -i 's|^-
+      \[Latency ideas\].*|- [Latency ideas](project_latency_ideas.md) —
+      2026-09-26: chunking…)
+  ⎿  21:- [Latency ideas](project_latency_ideas.md) — 2026-09-26: chunking
+     built (0d55696), PocketTTS/Coqui benchmarked, owner listening test pen
+     ding; STT-pause idea unbuilt
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● The memory is updated. It now records that chunking is built and both engines
+  are benchmarked, and that your listening test is the next step.
+
+  When you've listened to the two Chatterbox files, tell me what you heard, even
+  just "same" or "different". I'll take it from there.
+
+✻ Brewed for 17s · done 10:02 AM
+
+※ recap: We're cutting Persona's voice-reply latency before going multi-persona. Sentence chunking and the engine benchmarks are done and committed. Your next action is to play the two Chatterbox WAVs (whole.wav, then chunked.wav) with paplay and tell me if they sound different. (disable recaps in /config)
+
+❯ You did great and you are right. Chunked works for me. I say commit.          
+
+● It's already committed. I'll confirm the state.
+
+● Bash(git log --oneline -5 && git status --short)
+  ⎿  2bfcd75 Drop stale Coqui setup sentences from the latency note
+     4f84163 Record Coqui XTTS benchmark results in the latency note
+     611b59f Add standalone TTS benchmark scripts for Chatterbox, Coqui XTT
+     … +8 lines (ctrl+o to expand)
+
+● Everything is already committed. The chunking is in 0d55696, and the benchmark
+  scripts and notes are in the three commits after it. The only files left
+  uncommitted are the three that were untracked before we started
+  (audio/dropped/, the voice-sample legal note, and tools-chat-session.txt). I
+  left them out on purpose because they aren't part of this work.
+
+  Chunking is on stt-engine-experiment, and it goes live the next time you start
+  the stack with ./persona_start.sh. The speech services are stopped right now,
+  so nothing is running yet. When you restart, the first long reply should
+  start speaking in about 5 seconds, with pauses between the sentences.
+
+  I didn't add a listening result to the note. If you want your "chunked sounds
+  fine" recorded there, say so and I'll add a line.
+
+  The PocketTTS voice-cloning check (accept Kyutai's terms, then rerun its
+  script) is still open for whenever you have the energy. Nothing else is
+  waiting on you.
+
+✻ Worked for 7s · done 10:13 AM
+
+❯ Sure add that I didn't sense much difference. It might be worth tweaking but  
+  it's very small and not worth it now, for sure.                               
+
+● Bash(python3 - <<'EOF'
+      path = "notes/2026-09-24-latency-ideas.md"…)
+  ⎿  75b7580 Record owner's listening test: chunked Chatterbox sounds nearl
+     y the same
+
+● Bash(cd /home/eh/.claude/projects/-home-eh-Proj-Persona/memory && sed -i
+      's|Owner has NOT yet listened for prosody at chunk joins.|Owner listened
+      2026-09-26: chunked…)
+  ⎿  MEMORY.md:21:- [Latency ideas](project_latency_ideas.md) — 2026-09-26:
+      chunking built (0d55696), PocketTTS/Coqui benchmarked, owner listened
+     , chunking kept; STT-pause idea unbuilt
+     … +11 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● The description line in the memory file still says "listening test pending",
+  so I'm fixing that.
+
+● Bash(cd /home/eh/.claude/projects/-home-eh-Proj-Persona/memory && sed -i
+      "3s|owner's listening test pending|owner listened and kept chunking|"
+      project_latency_ideas.…)
+  ⎿  description: "Latency work status as of 2026-09-26 — chunking built (0
+     d55696), TTS engine benchmarks (PocketTTS/Coqui) run, owner listened a
+     nd kept chunking; STT-pause idea still unbuilt"
+  ⎿  Shell cwd was reset to /home/eh/Proj/Persona
+
+● I added your listening result to the latency note and committed it as 75b7580.
+  It says you heard almost no difference between whole and chunked, that a
+  small prosody change at the joins might be worth tweaking someday, and that it
+  isn't worth doing now. Chunking stays on. I also updated my memory, so the
+  next session starts from the same place.
+
+  The stack is stopped, so chunking goes live the next time you run
+  ./persona_start.sh. It hasn't been tried in the full stack yet. On your first
+  long reply after restart, expect sound within about 5 seconds and then pauses
+  between sentences.
+
+  Nothing else is waiting on you. The PocketTTS voice-cloning check and the
+  pause-STT idea are both open whenever you want them.
+✻ Baked for 12s · done 10:14 AM
+
+❯ Great. I'll break and pick up later. I took this snapshot to warn             
+  Massachusetts friends about the storm. They've seen some of the Persona       
+  progress. '/home/eh/Documents/sal norheaster.png'                             
+
+● I'll take a look.
+
+  Read 1 file (ctrl+o to expand)
+
+● That's a nice snapshot. The bubble shows the model, voice and provider on one
+  info line, and the reply reads well in that font.
+
+  - Check the numbers: I can't tell from the picture whether Sal looked up the
+    forecast or is answering from the model alone. If it came from a live
+    lookup, ignore this. If not, the rain totals and gust speeds could be stale
+    or invented. Before your friends act on them, have them check the National
+    Weather Service forecast for Boston (weather.gov/box). The sensible advice,
+    stay off the water and avoid shoreline driving, holds either way.
+  - A small quirk: The reply says "Sal's take:", so the model is referring to
+    itself in the third person. It's harmless, but it's an easy fix in the
+    persona prompt if you want it gone.
+  - Why chunking helps: That reply is about 65 words, so it's the kind of long
+    answer that used to take 30 seconds or more before any sound. After the
+    restart it should start speaking within about 5 seconds.
+
+  Enjoy your break. Everything is committed and noted, so there's nothing to
+  hold in your head when you pick it back up. I hope your friends stay dry and
+  keep their power.
+
+✻ Baked for 9s · done 10:17 AM
+
+❯ That's your original internet_search tool for Sal, I'm sure. She knows        
+  nothing without it. I'm sure no one will rely on those numbers, they know     
+  she's a work in progress. Thank you for caring and warning.                   
+
+● That makes sense, thanks. If Sal has a search tool, the numbers came from a
+  lookup and not from her own head, which is what I hoped. I don't have a memory
+  of building it, but I'm glad it's working well enough to warn your friends.
+
+  Take your break. Everything from today is committed and written up, so you can
+  pick it up whenever you're ready.
+
+✻ Cooked for 3s · done 10:21 AM
