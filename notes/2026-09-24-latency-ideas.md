@@ -78,7 +78,10 @@ the four chunks: 5 words 5.45 s, 18 words 11.51 s, 15 words 9.21 s, 11 words
 not remove gaps: a chunk plays about 0.24 s/word but renders slower, so the
 next chunk is late (about 10 s of silence after the 5-word opener here).
 
-Not yet listened to for prosody at chunk joins. Not run through the full stack.
+Listening test (owner, 2026-09-26, `~/tts-bench/chatterbox/whole.wav` against
+`chunked.wav`): did not sense much difference. There may be a small prosody
+change at chunk joins that could be tweaked, but it is very small and not worth
+pursuing now. Chunking stays on. Not run through the full stack yet.
 
 Possible next tweak (not built): a small first chunk and larger later ones, to
 keep the fast start while paying the 3 s fixed cost fewer times. Where the 3 s
