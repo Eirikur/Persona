@@ -83,3 +83,36 @@ Not yet listened to for prosody at chunk joins. Not run through the full stack.
 Possible next tweak (not built): a small first chunk and larger later ones, to
 keep the fast start while paying the 3 s fixed cost fewer times. Where the 3 s
 goes inside `generate()` (perth watermark? s3gen setup?) is unmeasured.
+
+## TTS engine benchmark scripts (2026-09-26)
+
+Step 2 of the plan from the RealtimeTTS/Qwen/Coqui look: standalone scripts,
+nothing touches the stack. `tests/tts_bench_common.py` holds the shared reply
+(the same 49 words), renders it whole and chunked, saves both as WAVs in
+`~/tts-bench/<engine>/` for listening, and simulates playback to report first
+sound, silence between chunks, and request-to-done. One script per engine, each
+with its own uv environment: `tts_bench_chatterbox.py`, `tts_bench_coqui.py`,
+`tts_bench_pocket.py`. Stop the Persona speech services first so they do not
+compete for CPU.
+
+Results, same 49-word reply, CPU, no STT running:
+
+| engine (voice)            | first sound whole | first sound chunked | silence between chunks | request to done, chunked |
+|---------------------------|-------------------|---------------------|------------------------|--------------------------|
+| Chatterbox (Sal's sample) | 28.9 s            | 5.5 s               | 19.1 s                 | 40.9 s                   |
+| PocketTTS (built-in alba) | 3.1 s             | 0.39 s              | 0.0 s                  | 14.6 s                   |
+| Coqui XTTS-v2             | not run yet       |                     |                        |                          |
+
+PocketTTS renders at about 0.06 s/word against Chatterbox's 0.6-0.8, and is
+faster than real time (0.22x the speech length), so chunks never gap. Caveat:
+this was NOT Sal's voice. Cloning needs Kyutai's gated weights; accept the
+terms at https://huggingface.co/kyutai/pocket-tts and run `uvx hf auth login`,
+then rerun `tests/tts_bench_pocket.py`. The script says loudly when it falls
+back to alba. Quality and how well it clones are unheard.
+
+Coqui: the script installs and reaches the license prompt (CPML,
+non-commercial). It must be run by the owner, who has to answer that question:
+`! ./tests/tts_bench_coqui.py`. The `xtts.inference` calls after the prompt
+are untested. Two dependency traps found: `coqui-tts` 0.27.5 lets uv pick
+transformers 5.x, which removed a function it imports, so the script pins
+`transformers>=4.57,<5`; and torch 2.9+ needs the `coqui-tts[codec]` extra.
