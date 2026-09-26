@@ -122,9 +122,6 @@ Chatterbox's 0.77 (2.3x): about 1.6x faster, first sound in 2.8 s instead of
 it still gaps. Not a step change; PocketTTS is the only engine so far that
 renders faster than it speaks. Sound quality unheard.
 
-Earlier notes on getting Coqui to run: the script installs and reaches the license prompt (CPML,
-non-commercial). It must be run by the owner, who has to answer that question:
-`! ./tests/tts_bench_coqui.py`. The `xtts.inference` calls after the prompt
-are untested. Two dependency traps found: `coqui-tts` 0.27.5 lets uv pick
-transformers 5.x, which removed a function it imports, so the script pins
+Two dependency traps found getting Coqui to run: `coqui-tts` 0.27.5 lets uv
+pick transformers 5.x, which removed a function it imports, so the script pins
 `transformers>=4.57,<5`; and torch 2.9+ needs the `coqui-tts[codec]` extra.
