@@ -35,6 +35,8 @@ import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from persona_text_chunks import split_into_chunks
+
 warnings.filterwarnings("ignore", category=UserWarning, module="perth")
 
 
@@ -45,6 +47,11 @@ HUB_URL              = "http://127.0.0.1:8400"
 DEVICE               = "cpu"
 CHATTERBOX_MODEL     = "standard"
 DEFAULT_VOICE_PROMPT = "audio/bird-dream.wav"
+
+# A reply is rendered and played in chunks of at least this many words. Lower
+# starts sound sooner; higher means fewer, smoother-sounding pieces. Set it
+# very high (1000) to render each reply whole, as before chunking.
+CHUNK_MIN_WORDS      = 4
 
 
 # ─── Model Loading ───────────────────────────────────────────────────────────
@@ -76,6 +83,8 @@ print(f"Model loaded in {time.time() - load_started:.2f}s")
 # ─── Web Service ─────────────────────────────────────────────────────────────
 
 app = FastAPI()
+
+stop_requested = False
 
 
 class SpeakRequest(BaseModel):
@@ -122,8 +131,14 @@ def normalize_punctuation(text: str) -> str:
     return text
 
 
-def render_speech(text: str, voice_prompt: str):
-    """Render speech audio with Chatterbox while hiding noisy model output."""
+def render_speech(text: str, voice_prompt: str | None):
+    """
+    Render speech audio with Chatterbox while hiding noisy model output.
+
+    Chatterbox re-reads the voice sample every time it is given one. Passing
+    None reuses the sample from the previous call, so only a reply's first
+    chunk needs to pass it.
+    """
 
     sink = io.StringIO()
 
@@ -133,19 +148,21 @@ def render_speech(text: str, voice_prompt: str):
     return wav
 
 
-def play_speech(wav) -> None:
-    """Play rendered speech through the default sounddevice output."""
+def start_playing(wav) -> None:
+    """Begin playing rendered speech and return at once; play continues on its own."""
 
     audio = wav.squeeze().cpu().numpy()
 
     sd.play(audio, MODEL.sr)
-    sd.wait()
 
 
 @app.post("/stop")
 def stop():
-    """Stop any audio that is currently playing."""
+    """Stop the audio that is playing, and skip the chunks not yet played."""
 
+    global stop_requested
+
+    stop_requested = True
     sd.stop()
 
     return {"ok": True}
@@ -153,25 +170,56 @@ def stop():
 
 @app.post("/speak")
 def speak(req: SpeakRequest):
-    """Render and play one spoken response."""
+    """
+    Render and play one spoken response, one chunk at a time.
+
+    While a chunk plays, the next one renders. Playback of a chunk is waited
+    on only when the next chunk is ready to take its place.
+    """
+
+    global stop_requested
+
+    stop_requested = False
 
     text = normalize_punctuation(req.text)
-    words = len(text.split())
+    chunks = split_into_chunks(text, CHUNK_MIN_WORDS)
     started = time.time()
+    render_total = 0.0
 
-    wav = render_speech(text, req.voice_prompt)
-    elapsed = time.time() - started
+    for number, chunk in enumerate(chunks, start=1):
+        if stop_requested:
+            break
 
-    print(f"{words} words, {elapsed:.2f}s render, {elapsed / words:.2f}s/word")
+        render_started = time.time()
+        wav = render_speech(chunk, req.voice_prompt if number == 1 else None)
+        render_seconds = time.time() - render_started
+        render_total += render_seconds
 
-    try:
-        httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
-    except Exception:
-        pass  # the hub being briefly unavailable shouldn't hold up playback
+        words = len(chunk.split())
+        print(f"chunk {number}/{len(chunks)}: {words} words, "
+              f"{render_seconds:.2f}s render, {render_seconds / words:.2f}s/word")
 
-    play_speech(wav)
+        sd.wait()  # the previous chunk finishes before this one starts
 
-    return {"ok": True, "elapsed": elapsed, "words": words}
+        if stop_requested:
+            break
+
+        if number == 1:
+            print(f"first sound after {time.time() - started:.2f}s")
+
+            try:
+                httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
+            except Exception:
+                pass  # the hub being briefly unavailable shouldn't hold up playback
+
+        start_playing(wav)
+
+    sd.wait()
+
+    words = len(text.split())
+    print(f"{words} words, {render_total:.2f}s render, {render_total / words:.2f}s/word")
+
+    return {"ok": True, "elapsed": render_total, "words": words}
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────

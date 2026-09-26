@@ -46,3 +46,40 @@ Things to weigh:
 - Where it lives: `say()` in `persona_hub.py` sends the whole text to
   `speak()` in one call. The split could happen there, with one bubble still
   shown for the whole reply.
+
+## Idea 2 built (2026-09-26, branch `stt-engine-experiment`)
+
+Chunking lives in the speech service, not the hub's `say()`. Doing it in the
+hub would render and play each chunk in turn, so the next render could not
+start until the last chunk finished playing. In the service, `sd.play()` does
+not block, so the next chunk renders while the current one plays.
+
+- `persona_text_chunks.py` (new, no model or audio code) splits normalized text
+  at sentence ends and merges sentences until a chunk has `CHUNK_MIN_WORDS`
+  words (setting in `persona_speech_output.py`, now 4). Set it to 1000 to
+  render replies whole, as before.
+- `persona_speech_output.py`: renders chunk, waits for the previous chunk to
+  finish, plays. `/playback_start` is posted once, before the first chunk
+  plays. `/stop` sets a flag so unplayed chunks are skipped (a render already
+  in flight still finishes, as before). The voice sample is passed only with
+  the first chunk; Chatterbox re-reads it on every call that is given one.
+
+Measured directly (services stopped, one 49-word reply, no STT running):
+
+| | before | chunked (min 4) |
+|---|---|---|
+| first sound | 23.85 s | 5.45 s |
+| request to done | 35.8 s | 37.2 s |
+| render s/word | 0.49 | 0.69 |
+
+Each `generate()` call costs about 3 s fixed plus about 0.45 s/word (fit from
+the four chunks: 5 words 5.45 s, 18 words 11.51 s, 15 words 9.21 s, 11 words
+7.53 s). So chunking buys a faster start and pays for it in total time. It does
+not remove gaps: a chunk plays about 0.24 s/word but renders slower, so the
+next chunk is late (about 10 s of silence after the 5-word opener here).
+
+Not yet listened to for prosody at chunk joins. Not run through the full stack.
+
+Possible next tweak (not built): a small first chunk and larger later ones, to
+keep the fast start while paying the 3 s fixed cost fewer times. Where the 3 s
+goes inside `generate()` (perth watermark? s3gen setup?) is unmeasured.
