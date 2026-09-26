@@ -101,7 +101,7 @@ Results, same 49-word reply, CPU, no STT running:
 |---------------------------|-------------------|---------------------|------------------------|--------------------------|
 | Chatterbox (Sal's sample) | 28.9 s            | 5.5 s               | 19.1 s                 | 40.9 s                   |
 | PocketTTS (built-in alba) | 3.1 s             | 0.39 s              | 0.0 s                  | 14.6 s                   |
-| Coqui XTTS-v2             | not run yet       |                     |                        |                          |
+| Coqui XTTS-v2 (Sal's sample) | 34.3 s (see below) | 2.8 s            | 8.7 s                  | 28.2 s                   |
 
 PocketTTS renders at about 0.06 s/word against Chatterbox's 0.6-0.8, and is
 faster than real time (0.22x the speech length), so chunks never gap. Caveat:
@@ -110,7 +110,19 @@ terms at https://huggingface.co/kyutai/pocket-tts and run `uvx hf auth login`,
 then rerun `tests/tts_bench_pocket.py`. The script says loudly when it falls
 back to alba. Quality and how well it clones are unheard.
 
-Coqui: the script installs and reaches the license prompt (CPML,
+Coqui XTTS-v2 was run by the owner on 2026-09-26 (`! COQUI_TOS_AGREED=1
+./tests/tts_bench_coqui.py`; the plain `!` gives the license prompt no stdin,
+so it dies with EOFError). XTTS refuses long text: it warned that the reply
+exceeds its 250-character limit for English and may truncate. The whole-reply
+row is therefore not a fair number (it made 23.5 s of speech against 16.6 s
+chunked, so the audio is probably odd); chunking is required for XTTS anyway.
+Chunked, XTTS renders at 0.48 s/word (1.43x the speech length) against
+Chatterbox's 0.77 (2.3x): about 1.6x faster, first sound in 2.8 s instead of
+5.5 s, roughly 9 s of silence instead of 19 s. Still slower than real time, so
+it still gaps. Not a step change; PocketTTS is the only engine so far that
+renders faster than it speaks. Sound quality unheard.
+
+Earlier notes on getting Coqui to run: the script installs and reaches the license prompt (CPML,
 non-commercial). It must be run by the owner, who has to answer that question:
 `! ./tests/tts_bench_coqui.py`. The `xtts.inference` calls after the prompt
 are untested. Two dependency traps found: `coqui-tts` 0.27.5 lets uv pick
