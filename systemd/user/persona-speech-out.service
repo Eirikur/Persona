@@ -5,6 +5,7 @@ PartOf=persona.target
 
 [Service]
 SuccessExitStatus=143
+Environment=HF_HOME=/home/eh/AImodels/
 ExecStart=/home/eh/Proj/Persona/persona_speech_output.py
 WorkingDirectory=/home/eh/Proj/Persona
 Restart=always

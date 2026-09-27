@@ -8,86 +8,62 @@
 #    "httpx",
 #    "numpy",
 #    "torch",
-#    "torchaudio",
 #    "sounddevice",
-#    "chatterbox-tts>=0.1.5",
-#    "resemble-perth",
+#    "pocket-tts",
 # ]
-#
-# [tool.uv.extra-build-dependencies]
-# pkuseg = ["numpy"]
 # ///
 
 """Speech output service for Persona.
 
-This service accepts text from the hub, renders it with Chatterbox, and plays the
-result through the system's default audio output.
+This service accepts text from the hub, renders it whole with PocketTTS, and
+plays the result through the system's default audio output.
 """
 
-import io
 import time
-import warnings
-from contextlib import redirect_stderr, redirect_stdout
 
 import httpx
+import numpy as np
 import sounddevice as sd
 import uvicorn
 from fastapi import FastAPI
+from pocket_tts import TTSModel
 from pydantic import BaseModel
-
-from persona_text_chunks import split_into_chunks
-
-warnings.filterwarnings("ignore", category=UserWarning, module="perth")
 
 
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 PORT                 = 8402
 HUB_URL              = "http://127.0.0.1:8400"
-DEVICE               = "cpu"
-CHATTERBOX_MODEL     = "standard"
 DEFAULT_VOICE_PROMPT = "audio/bird-dream.wav"
-
-# A reply is rendered and played in chunks of at least this many words.
-# Chatterbox on this CPU renders slower than real time, so chunking only
-# moves the wait from before first sound to between chunks — it doesn't
-# remove it. Those mid-reply pauses read as unintentional emphasis, which is
-# worse than one long pause up front. Off (1000) until render is faster than
-# playback. See notes/2026-09-27-chunking-output-fix.md.
-CHUNK_MIN_WORDS      = 1000
 
 
 # ─── Model Loading ───────────────────────────────────────────────────────────
 
-def load_model():
-    """Load the configured Chatterbox model."""
-
-    if CHATTERBOX_MODEL == "standard":
-        from chatterbox.tts import ChatterboxTTS
-
-        return ChatterboxTTS.from_pretrained(device=DEVICE)
-
-    if CHATTERBOX_MODEL == "turbo":
-        from chatterbox.tts_turbo import ChatterboxTurboTTS
-
-        return ChatterboxTurboTTS.from_pretrained(device=DEVICE)
-
-    raise ValueError("CHATTERBOX_MODEL must be 'standard' or 'turbo'")
-
-
-print(f"Loading Chatterbox {CHATTERBOX_MODEL} on {DEVICE.upper()}...")
+print("Loading PocketTTS...")
 load_started = time.time()
 
-MODEL = load_model()
+MODEL = TTSModel.load_model()
 
 print(f"Model loaded in {time.time() - load_started:.2f}s")
+
+# One prepared voice state per sample file. PocketTTS's cloning setup step
+# (get_state_for_audio_prompt) costs about a second, so each voice prompt is
+# only prepared once and reused after that.
+VOICE_STATES = {}
+
+
+def voice_state_for(voice_prompt: str):
+    """Return the prepared PocketTTS state for a voice sample, preparing it once."""
+
+    if voice_prompt not in VOICE_STATES:
+        VOICE_STATES[voice_prompt] = MODEL.get_state_for_audio_prompt(voice_prompt)
+
+    return VOICE_STATES[voice_prompt]
 
 
 # ─── Web Service ─────────────────────────────────────────────────────────────
 
 app = FastAPI()
-
-stop_requested = False
 
 
 class SpeakRequest(BaseModel):
@@ -98,7 +74,7 @@ class SpeakRequest(BaseModel):
 
 
 def normalize_punctuation(text: str) -> str:
-    """Make generated text a little easier for Chatterbox to speak."""
+    """Make generated text a little easier for the model to speak."""
 
     text = " ".join((text or "").split())
 
@@ -134,38 +110,26 @@ def normalize_punctuation(text: str) -> str:
     return text
 
 
-def render_speech(text: str, voice_prompt: str | None):
-    """
-    Render speech audio with Chatterbox while hiding noisy model output.
+def render_speech(text: str, voice_prompt: str):
+    """Render speech audio for the whole reply with PocketTTS."""
 
-    Chatterbox re-reads the voice sample every time it is given one. Passing
-    None reuses the sample from the previous call, so only a reply's first
-    chunk needs to pass it.
-    """
+    state = voice_state_for(voice_prompt)
 
-    sink = io.StringIO()
-
-    with redirect_stderr(sink), redirect_stdout(sink):
-        wav = MODEL.generate(text, audio_prompt_path=voice_prompt)
-
-    return wav
+    return MODEL.generate_audio(state, text)
 
 
 def start_playing(wav) -> None:
     """Begin playing rendered speech and return at once; play continues on its own."""
 
-    audio = wav.squeeze().cpu().numpy()
+    audio = np.asarray(wav, dtype=np.float32).reshape(-1)
 
-    sd.play(audio, MODEL.sr)
+    sd.play(audio, MODEL.sample_rate)
 
 
 @app.post("/stop")
 def stop():
-    """Stop the audio that is playing, and skip the chunks not yet played."""
+    """Stop the audio that is currently playing."""
 
-    global stop_requested
-
-    stop_requested = True
     sd.stop()
 
     return {"ok": True}
@@ -173,56 +137,26 @@ def stop():
 
 @app.post("/speak")
 def speak(req: SpeakRequest):
-    """
-    Render and play one spoken response, one chunk at a time.
-
-    While a chunk plays, the next one renders. Playback of a chunk is waited
-    on only when the next chunk is ready to take its place.
-    """
-
-    global stop_requested
-
-    stop_requested = False
+    """Render and play one spoken response."""
 
     text = normalize_punctuation(req.text)
-    chunks = split_into_chunks(text, CHUNK_MIN_WORDS)
     started = time.time()
-    render_total = 0.0
 
-    for number, chunk in enumerate(chunks, start=1):
-        if stop_requested:
-            break
-
-        render_started = time.time()
-        wav = render_speech(chunk, req.voice_prompt if number == 1 else None)
-        render_seconds = time.time() - render_started
-        render_total += render_seconds
-
-        words = len(chunk.split())
-        print(f"chunk {number}/{len(chunks)}: {words} words, "
-              f"{render_seconds:.2f}s render, {render_seconds / words:.2f}s/word")
-
-        sd.wait()  # the previous chunk finishes before this one starts
-
-        if stop_requested:
-            break
-
-        if number == 1:
-            print(f"first sound after {time.time() - started:.2f}s")
-
-            try:
-                httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
-            except Exception:
-                pass  # the hub being briefly unavailable shouldn't hold up playback
-
-        start_playing(wav)
-
-    sd.wait()
+    wav = render_speech(text, req.voice_prompt)
+    elapsed = time.time() - started
 
     words = len(text.split())
-    print(f"{words} words, {render_total:.2f}s render, {render_total / words:.2f}s/word")
+    print(f"{words} words, {elapsed:.2f}s render, {elapsed / words:.2f}s/word")
 
-    return {"ok": True, "elapsed": render_total, "words": words}
+    try:
+        httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
+    except Exception:
+        pass  # the hub being briefly unavailable shouldn't hold up playback
+
+    start_playing(wav)
+    sd.wait()
+
+    return {"ok": True, "elapsed": elapsed, "words": words}
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
