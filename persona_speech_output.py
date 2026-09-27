@@ -48,10 +48,13 @@ DEVICE               = "cpu"
 CHATTERBOX_MODEL     = "standard"
 DEFAULT_VOICE_PROMPT = "audio/bird-dream.wav"
 
-# A reply is rendered and played in chunks of at least this many words. Lower
-# starts sound sooner; higher means fewer, smoother-sounding pieces. Set it
-# very high (1000) to render each reply whole, as before chunking.
-CHUNK_MIN_WORDS      = 4
+# A reply is rendered and played in chunks of at least this many words.
+# Chatterbox on this CPU renders slower than real time, so chunking only
+# moves the wait from before first sound to between chunks — it doesn't
+# remove it. Those mid-reply pauses read as unintentional emphasis, which is
+# worse than one long pause up front. Off (1000) until render is faster than
+# playback. See notes/2026-09-27-chunking-output-fix.md.
+CHUNK_MIN_WORDS      = 1000
 
 
 # ─── Model Loading ───────────────────────────────────────────────────────────
