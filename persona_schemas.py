@@ -47,10 +47,11 @@ DEFAULT_MODELS = {
 
 @dataclass
 class VoiceProfile:
-    """A named voice for speech output."""
+    """A named voice for speech output. label is the name shown on the bubble; empty means use the sample file's name."""
     name: str
     sample_file: str = ""
     speed: float = 1.0
+    label: str = ""
 
 
 @dataclass

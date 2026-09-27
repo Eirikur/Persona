@@ -677,7 +677,7 @@
     if (!msg || !file) return;
 
     const persona = msg.dataset.persona;
-    const resp = await fetch(`/voice/${encodeURIComponent(persona)}`, {method: 'POST', body: file});
+    const resp = await fetch(`/voice/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
     if (resp.ok) {
       const result = await resp.json();
       addLogLine('voice', `${persona} voice -> ${result.sample_file}`);

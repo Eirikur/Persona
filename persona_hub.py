@@ -179,8 +179,8 @@ def effective_model(persona: Persona) -> str:
 
 
 def voice_label(voice: VoiceProfile) -> str:
-    """The voice's sample file name without directory or extension, as shown on the bubble."""
-    return Path(voice.sample_file or DEFAULT_VOICE_SAMPLE).stem
+    """The name shown on the bubble: the voice's label if it has one, else its sample file name without directory or extension."""
+    return voice.label or Path(voice.sample_file or DEFAULT_VOICE_SAMPLE).stem
 
 
 def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str) -> None:
@@ -585,9 +585,12 @@ def set_provider(provider: str):
 
 
 @app.post("/voice/{persona_name}")
-async def set_voice(persona_name: str, request: Request):
+async def set_voice(persona_name: str, request: Request, name: str = ""):
     """
     Swap a persona's voice sample for the wav file in the request body.
+
+    The optional "name" query parameter is the file's original name; its stem
+    is shown on the bubble, while the saved copy gets a timestamped name.
 
     The persona is not told: its next spoken reply simply comes out in the
     new voice. Gets its own voice profile, so other personas sharing the
@@ -611,6 +614,7 @@ async def set_voice(persona_name: str, request: Request):
         name        = persona_name,
         sample_file = "audio/dropped/" + file_name,
         speed       = old.speed,
+        label       = Path(name).stem,
     )
     persona.voice = persona_name
     save(state)
