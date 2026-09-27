@@ -401,7 +401,8 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
       5. COMMANDS match    → run shell command, return ([], True)
       6. Quiet phrases     → switch to named mode, return ([], True)
       7. BROADCAST_PHRASES → all loaded personas
-      8. Named mode → persona whose wake word matches, or []
+      8. Named mode → persona whose wake word matches (and switches the
+         room to open mode for what follows), or []
       9. Open mode  → all loaded personas
     """
     global MODE
@@ -468,6 +469,11 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
                 continue
             for ww in persona.wake_words:
                 if normalized.startswith(ww):
+                    # Being named switches the room to open mode, so the
+                    # rest of the exchange doesn't need a name on every
+                    # line. Say "go quiet" to require one again.
+                    MODE = "open"
+                    print(f"mode → open (named {pname})")
                     return [pname], True
         return [], True
 
