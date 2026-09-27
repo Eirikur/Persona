@@ -33,10 +33,11 @@ STATE_FILE = Path.home() / ".config" / "persona" / "state.json"
 
 @dataclass
 class VoiceProfile:
-    """A named voice for speech output."""
+    """A named voice for speech output. label is the name shown on the bubble; empty means use the sample file's name."""
     name: str
     sample_file: str = ""
     speed: float = 1.0
+    label: str = ""
 
 
 @dataclass
@@ -60,6 +61,7 @@ class Persona:
     input: str = "default"
     provider: str = "cerebras"
     model: str | None = None
+    tools: list[str] = field(default_factory=list)   # names into persona_tools.TOOLS
 
 
 @dataclass
