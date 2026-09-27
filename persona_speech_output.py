@@ -7,67 +7,55 @@
 #    "uvicorn",
 #    "numpy",
 #    "torch",
-#    "torchaudio",
 #    "sounddevice",
-#    "chatterbox-tts>=0.1.5",
-#    "resemble-perth",
+#    "pocket-tts",
 # ]
-#
-# [tool.uv.extra-build-dependencies]
-# pkuseg = ["numpy"]
 # ///
 
 """Speech output service for Persona.
 
-This service accepts text from the hub, renders it with Chatterbox, and plays the
-result through the system's default audio output.
+This service accepts text from the hub, renders it whole with PocketTTS, and
+plays the result through the system's default audio output.
 """
 
-import io
 import time
-import warnings
-from contextlib import redirect_stderr, redirect_stdout
 
+import numpy as np
 import sounddevice as sd
 import uvicorn
 from fastapi import FastAPI
+from pocket_tts import TTSModel
 from pydantic import BaseModel
-
-warnings.filterwarnings("ignore", category=UserWarning, module="perth")
 
 
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 PORT                 = 8402
-DEVICE               = "cpu"
-CHATTERBOX_MODEL     = "standard"
 DEFAULT_VOICE_PROMPT = "audio/bird-dream.wav"
 
 
 # ─── Model Loading ───────────────────────────────────────────────────────────
 
-def load_model():
-    """Load the configured Chatterbox model."""
-
-    if CHATTERBOX_MODEL == "standard":
-        from chatterbox.tts import ChatterboxTTS
-
-        return ChatterboxTTS.from_pretrained(device=DEVICE)
-
-    if CHATTERBOX_MODEL == "turbo":
-        from chatterbox.tts_turbo import ChatterboxTurboTTS
-
-        return ChatterboxTurboTTS.from_pretrained(device=DEVICE)
-
-    raise ValueError("CHATTERBOX_MODEL must be 'standard' or 'turbo'")
-
-
-print(f"Loading Chatterbox {CHATTERBOX_MODEL} on {DEVICE.upper()}...")
+print("Loading PocketTTS...")
 load_started = time.time()
 
-MODEL = load_model()
+MODEL = TTSModel.load_model()
 
 print(f"Model loaded in {time.time() - load_started:.2f}s")
+
+# One prepared voice state per sample file. PocketTTS's cloning setup step
+# (get_state_for_audio_prompt) costs about a second, so each voice prompt is
+# only prepared once and reused after that.
+VOICE_STATES = {}
+
+
+def voice_state_for(voice_prompt: str):
+    """Return the prepared PocketTTS state for a voice sample, preparing it once."""
+
+    if voice_prompt not in VOICE_STATES:
+        VOICE_STATES[voice_prompt] = MODEL.get_state_for_audio_prompt(voice_prompt)
+
+    return VOICE_STATES[voice_prompt]
 
 
 # ─── Web Service ─────────────────────────────────────────────────────────────
@@ -83,7 +71,7 @@ class SpeakRequest(BaseModel):
 
 
 def normalize_punctuation(text: str) -> str:
-    """Make generated text a little easier for Chatterbox to speak."""
+    """Make generated text a little easier for the model to speak."""
 
     if not text:
         return "You need to add some text for me to talk."
@@ -120,22 +108,19 @@ def normalize_punctuation(text: str) -> str:
 
 
 def render_speech(text: str, voice_prompt: str):
-    """Render speech audio with Chatterbox while hiding noisy model output."""
+    """Render speech audio for the whole reply with PocketTTS."""
 
-    sink = io.StringIO()
+    state = voice_state_for(voice_prompt)
 
-    with redirect_stderr(sink), redirect_stdout(sink):
-        wav = MODEL.generate(text, audio_prompt_path=voice_prompt)
-
-    return wav
+    return MODEL.generate_audio(state, text)
 
 
 def play_speech(wav) -> None:
     """Play rendered speech through the default sounddevice output."""
 
-    audio = wav.squeeze().cpu().numpy()
+    audio = np.asarray(wav, dtype=np.float32).reshape(-1)
 
-    sd.play(audio, MODEL.sr)
+    sd.play(audio, MODEL.sample_rate)
     sd.wait()
 
 
