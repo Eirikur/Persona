@@ -123,6 +123,11 @@ BROADCAST_PHRASES = (
 # ─── Runtime State ────────────────────────────────────────────────────────────
 
 state          = load()
+
+# Who is in the chat room is temporary: every start begins with Sal alone,
+# whatever an earlier run saved. Changing it deliberately will be a separate gesture.
+state.loaded_personas = ["default"]
+
 speaking       = False
 last_spoke     = 0.0
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
@@ -488,7 +493,36 @@ def get_state():
         "provider":         persona.provider,
         "model":            persona.model,
         "loaded_personas":  state.loaded_personas,
+        "personas":         list(state.personas),
     }
+
+
+@app.post("/persona/{persona_name}/load")
+def load_persona(persona_name: str):
+    """Bring a persona into the chat room, so it hears input and may reply."""
+    if persona_name not in state.personas:
+        raise HTTPException(status_code=404, detail="Unknown persona: " + persona_name)
+
+    if persona_name not in state.loaded_personas:
+        state.loaded_personas.append(persona_name)
+
+    emit("roster", "", loaded_personas=state.loaded_personas)
+    print(f"persona {persona_name} joined the chat")
+    return {"loaded_personas": state.loaded_personas}
+
+
+@app.post("/persona/{persona_name}/unload")
+def unload_persona(persona_name: str):
+    """Remove a persona from the chat room. Its earlier bubbles stay on screen."""
+    if persona_name not in state.personas:
+        raise HTTPException(status_code=404, detail="Unknown persona: " + persona_name)
+
+    if persona_name in state.loaded_personas:
+        state.loaded_personas.remove(persona_name)
+
+    emit("roster", "", loaded_personas=state.loaded_personas)
+    print(f"persona {persona_name} left the chat")
+    return {"loaded_personas": state.loaded_personas}
 
 
 @app.post("/think")

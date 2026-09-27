@@ -352,14 +352,34 @@
     border-bottom: 1px solid var(--border);
   }
 
+  /* Present in the chat: brighter. Not present: dim. Click to join or to
+     find their last bubble; right-click for the Remove popup. */
   .roster-name {
     font-size: 8px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--text-info);
+    cursor: pointer;
   }
 
-  .roster-name.system { color: var(--text-muted); }
+  .roster-name.absent { color: var(--text-dim); }
+
+  #roster-menu {
+    position: fixed;
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-info);
+    cursor: pointer;
+    z-index: 10;
+  }
+
+  /* One green pulse on the bubble a roster click scrolled to. */
+  .message.sal.found .bubble { animation: voice-pulse 0.9s ease-in-out 1; }
 
   /* ── panels (chat / logs / settings) ── */
   .panel {
@@ -458,9 +478,9 @@
     <button class="tab" data-tab="test">Test</button>
   </div>
 
-  <div id="roster">
-    <span class="roster-name system">system</span>
-  </div>
+  <div id="roster"></div>
+
+  <div id="roster-menu">Remove from chat</div>
 
   <div id="panel-chat" class="panel active">
 
@@ -787,23 +807,78 @@
     fetch(`/model/${encodeURIComponent(modelInput.value)}`, {method: 'POST'});
   });
 
-  // ── roster: who's present, fetched once at load ──
+  // ── roster: every known persona, dim unless present in the chat ──
   const rosterEl = document.getElementById('roster');
+  const menuEl   = document.getElementById('roster-menu');
+  let rosterLoaded = [];
+  let menuTarget   = '';
+
+  function drawRoster(allNames, loadedNames) {
+    rosterLoaded = loadedNames;
+    rosterEl.innerHTML = '';
+
+    for (const name of allNames) {
+      const el = document.createElement('span');
+      el.className = 'roster-name';
+      if (!loadedNames.includes(name)) el.classList.add('absent');
+      el.textContent = personaDisplayName(name);
+      el.dataset.persona = name;
+      rosterEl.appendChild(el);
+    }
+  }
 
   function loadRoster() {
     fetch('/state')
       .then(r => r.json())
       .then(s => {
-        for (const name of s.loaded_personas || []) {
-          const el = document.createElement('span');
-          el.className = 'roster-name';
-          el.textContent = personaDisplayName(name);
-          rosterEl.appendChild(el);
-        }
+        drawRoster(s.personas || [], s.loaded_personas || []);
         hearingEl.classList.toggle('muted', !!s.muted);
       });
   }
   loadRoster();
+
+  // Left click: join the chat if absent, else scroll to their last bubble.
+  rosterEl.addEventListener('click', e => {
+    const name = e.target.dataset.persona;
+    if (!name) return;
+
+    if (!rosterLoaded.includes(name)) {
+      fetch('/persona/' + encodeURIComponent(name) + '/load', {method: 'POST'});
+      return;
+    }
+
+    const bubbles = document.querySelectorAll('.message.sal[data-persona="' + name + '"]');
+    const last    = bubbles[bubbles.length - 1];
+    if (!last) return;
+
+    last.scrollIntoView({behavior: 'smooth', block: 'center'});
+    last.classList.remove('found');
+    void last.offsetWidth;
+    last.classList.add('found');
+    last.addEventListener('animationend', () => last.classList.remove('found'), {once: true});
+  });
+
+  // Right click on a present persona: show the Remove popup at the pointer.
+  rosterEl.addEventListener('contextmenu', e => {
+    const name = e.target.dataset.persona;
+    if (!name) return;
+    e.preventDefault();
+    if (!rosterLoaded.includes(name)) return;
+
+    menuTarget         = name;
+    menuEl.style.left  = e.clientX + 'px';
+    menuEl.style.top   = e.clientY + 'px';
+    menuEl.style.display = 'block';
+  });
+
+  menuEl.addEventListener('click', () => {
+    fetch('/persona/' + encodeURIComponent(menuTarget) + '/unload', {method: 'POST'});
+    menuEl.style.display = 'none';
+  });
+
+  document.addEventListener('click', e => {
+    if (e.target !== menuEl) menuEl.style.display = 'none';
+  });
 
   function connectSSE() {
     const es = new EventSource('/events');
@@ -842,6 +917,8 @@
         } else {
           addBubble('user', speaker || 'you', text);
         }
+      } else if (type === 'roster') {
+        loadRoster();
       } else if (type === 'inference') {
         stateEls.inference.classList.remove('tool');
         setLive('inference');
