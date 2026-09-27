@@ -97,10 +97,10 @@ class SpeakRequest(BaseModel):
 def normalize_punctuation(text: str) -> str:
     """Make generated text a little easier for Chatterbox to speak."""
 
+    text = " ".join((text or "").split())
+
     if not text:
         return "You need to add some text for me to talk."
-
-    text = " ".join(text.split())
 
     if text[0].islower():
         text = text[0].upper() + text[1:]

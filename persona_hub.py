@@ -344,6 +344,10 @@ def say(persona_name: str, text: str) -> None:
     """
     global speaking, last_spoke
 
+    if not text.strip():
+        print(f"persona {persona_name}: empty reply, nothing to say")
+        return
+
     persona = state.personas[persona_name]
     voice   = state.voices.get(persona.voice, state.voices["default"])
 
