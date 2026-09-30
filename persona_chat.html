@@ -838,9 +838,15 @@
   loadRoster();
 
   // Left click: join the chat if absent, else scroll to their last bubble.
+  // Shift+click toggles presence: removes a present persona, adds an absent one.
   rosterEl.addEventListener('click', e => {
     const name = e.target.dataset.persona;
     if (!name) return;
+
+    if (e.shiftKey && rosterLoaded.includes(name)) {
+      fetch('/persona/' + encodeURIComponent(name) + '/unload', {method: 'POST'});
+      return;
+    }
 
     if (!rosterLoaded.includes(name)) {
       fetch('/persona/' + encodeURIComponent(name) + '/load', {method: 'POST'});

@@ -5,6 +5,13 @@ out of this project) were ported to AMD ROCm on the new box, and the host is now
 configured for Persona to follow. This note records what was decided and why, so
 the Persona port does not re-derive it.
 
+**2026-09-27: this whole host setup was found gone** (no `/opt/rocm-7.2.2`, no
+ROCm apt repo, user not in `render`/`video`) — probably an OS
+reinstall/reimage after this note was written. Reinstalled from scratch; see
+`notes/2026-09-27-rocm-host-reinstall.md` for the exact recipe and a fresh
+benchmark. If anything below looks current but isn't working, check that
+note first before re-deriving.
+
 ## The machine
 
 Beelink GTR9 Pro — Ryzen AI MAX+ 395, Radeon 8060S (**gfx1151**), 128 GB RAM
