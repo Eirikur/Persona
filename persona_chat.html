@@ -652,6 +652,7 @@
     const bub = document.createElement('div');
     bub.className = 'bubble';
     bub.textContent = text;
+    if (personaKey) applyPersonaFont(personaKey, bub);
     msg.appendChild(bub);
     conv.appendChild(msg);
     conv.scrollTop = conv.scrollHeight;
@@ -688,6 +689,13 @@
     }
   });
 
+  // Each kind of droppable file: its extensions, and what to do with it.
+  // To make bubbles accept a new kind of resource, add a handler and a row.
+  const dropHandlers = [
+    {extensions: ['.wav'],                         handle: dropVoice},
+    {extensions: ['.ttf', '.otf', '.woff', '.woff2'], handle: dropFont},
+  ];
+
   document.addEventListener('drop', async e => {
     e.preventDefault();
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
@@ -696,7 +704,18 @@
     const file = e.dataTransfer.files[0];
     if (!msg || !file) return;
 
-    const persona = msg.dataset.persona;
+    const lowerName = file.name.toLowerCase();
+    const row = dropHandlers.find(h => h.extensions.some(ext => lowerName.endsWith(ext)));
+    if (!row) {
+      addLogLine('drop', `don't know what to do with ${file.name}`);
+      return;
+    }
+
+    await row.handle(msg.dataset.persona, msg, file);
+  });
+
+  // Swap the persona's voice for the dropped wav, then pulse the bubble ring.
+  async function dropVoice(persona, msg, file) {
     const resp = await fetch(`/voice/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
     if (resp.ok) {
       const result = await resp.json();
@@ -708,7 +727,44 @@
     } else {
       addLogLine('voice', `voice drop failed for ${persona}: ${resp.status}`);
     }
-  });
+  }
+
+  // ── font drop: a persona's "print voice" ──
+  // The font is loaded into this page only (FontFace API), so it never
+  // touches the system font list. It lasts until the page is reloaded; the
+  // hub keeps a copy in fonts/dropped/ for reference.
+  const personaFontFamily = {};
+  let fontDropCount = 0;
+
+  // Put the persona's dropped font (if any) on one bubble's text.
+  function applyPersonaFont(persona, bubbleEl) {
+    if (personaFontFamily[persona]) {
+      bubbleEl.style.fontFamily = "'" + personaFontFamily[persona] + "', serif";
+    }
+  }
+
+  // Load the dropped font, restyle every bubble of that persona, save a copy.
+  async function dropFont(persona, msg, file) {
+    fontDropCount += 1;
+    const family = 'dropped-font-' + fontDropCount;   // fresh name per drop, so re-drops never collide
+
+    try {
+      const face = new FontFace(family, await file.arrayBuffer());
+      await face.load();
+      document.fonts.add(face);
+    } catch (err) {
+      addLogLine('font', `${file.name} is not a usable font: ${err}`);
+      return;
+    }
+
+    personaFontFamily[persona] = family;
+    document.querySelectorAll('.message.sal[data-persona="' + persona + '"] .bubble')
+      .forEach(el => applyPersonaFont(persona, el));
+    addLogLine('font', `${persona} font -> ${file.name}`);
+
+    const resp = await fetch(`/font/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
+    if (!resp.ok) addLogLine('font', `font copy not saved for ${persona}: ${resp.status}`);
+  }
 
   input.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;

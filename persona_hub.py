@@ -69,6 +69,17 @@ LOCAL_PROVIDERS = ("ollama", "echo")
 # available to switch back to.
 DROPPED_VOICE_DIR = Path(__file__).parent / "audio" / "dropped"
 
+# Fonts dropped onto a bubble are copied here, same never-overwrite rule.
+# The first four bytes of a font file say what kind it is.
+DROPPED_FONT_DIR = Path(__file__).parent / "fonts" / "dropped"
+FONT_SIGNATURES  = {
+    b"\x00\x01\x00\x00": ".ttf",
+    b"true":             ".ttf",
+    b"OTTO":             ".otf",
+    b"wOFF":             ".woff",
+    b"wOF2":             ".woff2",
+}
+
 # Sample used when a voice profile names no file of its own.
 DEFAULT_VOICE_SAMPLE = "audio/bird-dream.wav"
 
@@ -427,6 +438,7 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     # through, so she can be interrupted by hand.
     if not typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
         print(f"ignored (self-hear): {normalized!r}")
+        emit("ignored", "while Sal was speaking: " + original)
         return [], False
 
     emit("heard", original)
@@ -665,6 +677,32 @@ async def set_voice(persona_name: str, request: Request, name: str = ""):
 
     print(f"persona {persona_name} voice → audio/dropped/{file_name}")
     return {"persona": persona_name, "sample_file": "audio/dropped/" + file_name}
+
+
+@app.post("/font/{persona_name}")
+async def save_font(persona_name: str, request: Request, name: str = ""):
+    """
+    Keep a copy of a font file dropped onto a persona's bubble.
+
+    The page loads the font itself; this only files it under
+    fonts/dropped/ with a timestamped name. Nothing in state changes, so a
+    dropped font never outlives the page.
+    """
+    if persona_name not in state.personas:
+        raise HTTPException(status_code=404, detail="Unknown persona: " + persona_name)
+
+    body      = await request.body()
+    extension = FONT_SIGNATURES.get(body[:4])
+    if extension is None:
+        raise HTTPException(status_code=400, detail="Not a font file")
+
+    DROPPED_FONT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp     = time.strftime("%Y%m%d-%H%M%S")
+    file_name = persona_name + "-" + stamp + "-" + Path(name).stem + extension
+    (DROPPED_FONT_DIR / file_name).write_bytes(body)
+
+    print(f"persona {persona_name} font → fonts/dropped/{file_name}")
+    return {"persona": persona_name, "saved_file": "fonts/dropped/" + file_name}
 
 
 @app.post("/stop")
