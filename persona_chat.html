@@ -39,6 +39,7 @@
     --state-live:     #C4CDD5;
     --state-active:   #b8956a;   /* "the LLM's area, in progress" -- tool call, or a reply waiting to be rendered into audio */
     --state-speaking: #5FAD6B;   /* audibly talking, right now */
+    --state-bad:      #C0584F;   /* a dropped file was refused */
     --font-sal:     'Alegreya', Georgia, serif;
     --font-user:    'Lucida Casual', 'Lucida Sans', sans-serif;
     --font-ui:      'Lucida Casual', 'Lucida Sans', sans-serif;
@@ -145,18 +146,27 @@
   .message .provider.local  { color: var(--provider-local); }
   .message .provider.remote { color: var(--provider-remote); }
 
-  /* Voice-file drop target: outlined while a file hovers, then the ring pulses
-     green four times after a successful drop -- Chatterbox needs a few seconds
-     to ingest the new sample, and the pulses say "working on it". */
+  /* File drop target: outlined while a file hovers, then the ring pulses
+     green after a successful drop, or red if the file was refused. --pulses
+     is set per drop: a voice sample gets four green pulses because the
+     speech engine needs a few seconds to ingest it ("working on it"). */
   .message.sal .bubble { transition: outline-color 0.3s; outline: 2px solid transparent; }
   .message.sal.drop-target .bubble  { outline-color: var(--provider-remote); }
-  .message.sal.voice-swapped .bubble {
-    animation: voice-pulse 0.9s ease-in-out 4;
+  .message.sal.drop-ok .bubble {
+    animation: voice-pulse 0.9s ease-in-out var(--pulses, 1);
+  }
+  .message.sal.drop-bad .bubble {
+    animation: drop-pulse-bad 0.9s ease-in-out var(--pulses, 1);
   }
 
   @keyframes voice-pulse {
     0%, 100% { outline-color: transparent; }
     50%      { outline-color: var(--state-speaking); }
+  }
+
+  @keyframes drop-pulse-bad {
+    0%, 100% { outline-color: transparent; }
+    50%      { outline-color: var(--state-bad); }
   }
 
   .message .bubble {
@@ -708,6 +718,7 @@
     const row = dropHandlers.find(h => h.extensions.some(ext => lowerName.endsWith(ext)));
     if (!row) {
       addLogLine('drop', `don't know what to do with ${file.name}`);
+      flashBubble(msg, false, 2);
       return;
     }
 
@@ -720,13 +731,30 @@
     if (resp.ok) {
       const result = await resp.json();
       addLogLine('voice', `${persona} voice -> ${result.sample_file}`);
-      msg.classList.remove('voice-swapped');
-      void msg.offsetWidth;   // restart the animation if a drop lands mid-pulse
-      msg.classList.add('voice-swapped');
-      msg.addEventListener('animationend', () => msg.classList.remove('voice-swapped'), {once: true});
+      flashBubble(msg, true, 4);
+      announceReceived(persona, file.name);
     } else {
       addLogLine('voice', `voice drop failed for ${persona}: ${resp.status}`);
+      flashBubble(msg, false, 2);
     }
+  }
+
+  // Pulse a bubble's ring green (the drop was accepted) or red (it was
+  // refused), the given number of times.
+  function flashBubble(msg, accepted, pulses) {
+    const good = 'drop-ok';
+    const bad  = 'drop-bad';
+
+    msg.classList.remove(good, bad);
+    void msg.offsetWidth;   // restart the animation if a drop lands mid-pulse
+    msg.style.setProperty('--pulses', pulses);
+    msg.classList.add(accepted ? good : bad);
+    msg.addEventListener('animationend', () => msg.classList.remove(good, bad), {once: true});
+  }
+
+  // The persona acknowledges a file with a bubble of their own.
+  function announceReceived(persona, fileName) {
+    addBubble('sal', personaBubbleName(persona), 'I received ' + fileName + '.', null, persona);
   }
 
   // ── font drop: a persona's "print voice" ──
@@ -768,11 +796,21 @@
   // Load the dropped font, restyle the persona's bubbles, save a copy.
   async function dropFont(persona, msg, file) {
     const ok = await useFont(persona, await file.arrayBuffer(), file.name);
-    if (!ok) return;
+    if (!ok) {
+      flashBubble(msg, false, 2);
+      return;
+    }
     addLogLine('font', `${persona} font -> ${file.name}`);
 
     const resp = await fetch(`/font/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
-    if (!resp.ok) addLogLine('font', `font copy not saved for ${persona}: ${resp.status}`);
+    if (!resp.ok) {
+      addLogLine('font', `font copy not saved for ${persona}: ${resp.status}`);
+      flashBubble(msg, false, 2);
+      return;
+    }
+
+    flashBubble(msg, true, 2);
+    announceReceived(persona, file.name);
   }
 
   input.addEventListener('keydown', e => {
