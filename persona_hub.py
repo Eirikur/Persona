@@ -64,6 +64,12 @@ NOTIFY_ON_BUBBLE   = True
 # color, so a glance says whether a reply left the box.
 LOCAL_PROVIDERS = ("ollama", "echo")
 
+# What the bubble shows for a provider, where the plain name would confuse.
+# The echo provider is not a service, so its bubble just says "local".
+PROVIDER_LABELS = {
+    "echo": "local",
+}
+
 # Voice samples dropped onto a bubble are saved here, one new file per drop,
 # so the original voice files are never overwritten and old drops stay
 # available to switch back to.
@@ -218,7 +224,7 @@ def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str
         "type":           "sal_turn",
         "persona":        persona_name,
         "text":           text,
-        "provider":       provider,
+        "provider":       PROVIDER_LABELS.get(provider, provider),
         "provider_local": provider in LOCAL_PROVIDERS,
         "model":          model,
         "voice":          voice,
