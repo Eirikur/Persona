@@ -1018,6 +1018,8 @@
         stateEls.inference.classList.remove('tool');
         stateEls.speaking.classList.remove('rendering', 'playing');
         setLive('hearing');
+      } else if (type === 'log') {
+        addLogLine('system', text);
       } else if (type === 'run_script') {
         // The hub heard a spoken command that names a script (text is the
         // script's name): show the Test tab and run it where it can be seen.

@@ -109,6 +109,10 @@ SCRIPT_PHRASES: dict[str, str] = {
     "system check recognition": "stt_check",
 }
 
+# Spoken command that writes everything unsaved (dropped fonts, roster changes)
+# into the stored settings. Matched like SCRIPT_PHRASES: at the very start.
+PERSIST_PHRASE = "system persist"
+
 # STT mishearing corrections. Applied to every input before dispatch.
 MISHEARINGS: dict[str, str] = {
     "emax":     "emacs",
@@ -408,7 +412,8 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
       1. Apply MISHEARINGS corrections
       2. "stop"            → interrupt speech, return ([], True)
       3. Self-hear guard (voice only) → drop entirely, return ([], False)
-      4. SCRIPT_PHRASES    → tell the chat window to run a script, return ([], True)
+      4. PERSIST_PHRASE    → save state to disk, return ([], True)
+         SCRIPT_PHRASES    → tell the chat window to run a script, return ([], True)
       5. COMMANDS match    → run shell command, return ([], True)
       6. Quiet phrases     → switch to named mode, return ([], True)
       7. BROADCAST_PHRASES → all loaded personas
@@ -450,6 +455,12 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     # Drop punctuation so "System, run test." reads as "system run test".
     not_a_word   = r"[^a-z0-9' ]+"
     spoken_words = " ".join(re.sub(not_a_word, " ", normalized).split())
+
+    if spoken_words.startswith(PERSIST_PHRASE):
+        save(state)
+        print("state persisted")
+        emit("log", "settings persisted")
+        return [], True
 
     for phrase, script in SCRIPT_PHRASES.items():
         if spoken_words.startswith(phrase):
