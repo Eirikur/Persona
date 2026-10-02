@@ -20,6 +20,12 @@ sleep 0.3
 # Launch Chromium
 # We use exec so that chromium becomes PID 1 of the service
 # Height includes room for the tab bar and roster row added under the header.
+#
+# The chat window gets its own browser profile. Without one, Chromium hands
+# the window to the everyday browser that is already running (the service
+# then exits at once) and restores that browser's remembered window size,
+# ignoring --window-size.
 exec chromium --app="http://localhost:8400/ui/persona_chat.html?v=$(date +%s)" \
+    --user-data-dir="$HOME/.config/persona/chromium" \
     --no-restore-last-session \
     --window-size=1200,1600
