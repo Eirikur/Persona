@@ -901,7 +901,7 @@
 
         // Fonts the hub remembers (dropped earlier, or saved by "system persist").
         for (const [persona, path] of Object.entries(s.fonts || {})) {
-          if (!personaFontFamily[persona]) useFont(persona, "url(" + path + ")", path);
+          if (!personaFontFamily[persona]) useFont(persona, 'url("' + encodeURI(path) + '")', path);
         }
       });
   }
