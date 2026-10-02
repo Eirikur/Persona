@@ -22,4 +22,4 @@ sleep 0.3
 # Height includes room for the tab bar and roster row added under the header.
 exec chromium --app="http://localhost:8400/ui/persona_chat.html?v=$(date +%s)" \
     --no-restore-last-session \
-    --window-size=1200,2100
+    --window-size=1200,1600

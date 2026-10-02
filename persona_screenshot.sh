@@ -19,7 +19,7 @@ PROFILE_DIR=$(mktemp -d /tmp/persona-screenshot-profile.XXXXXX)
 # Same page and dimensions as the real launcher, so sizing checks are apples-to-apples.
 chromium --headless=new --disable-gpu --hide-scrollbars --no-sandbox \
     --screenshot="$OUT" \
-    --window-size=1200,2100 \
+    --window-size=1200,1600 \
     --user-data-dir="$PROFILE_DIR" \
     "http://localhost:8400/ui/persona_chat.html?no_shutdown=1"
 
