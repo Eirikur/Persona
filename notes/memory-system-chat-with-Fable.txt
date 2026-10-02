@@ -1,0 +1,39 @@
+ I'm sure I'm capable of following your suggested path. I've not seen the code for such a thing (never looked at a harness--I do have Pi Agent installed) . I just don't know the control flow. Can you recommend a project to look at? You say: "Hand-write ten lines into Sal's core.md, inject it into her system prompt, and ask her something only that file knows. You're done when she answers correctly." When does injection happen? I'm guessing that I patch it into the prompt via templating when I send the prompt via the OpenAI API, right?
+Explaining how memory injection ties into prompt templating.
+
+No searching needed here — your mental model is exactly right.
+
+Injection happens at request construction time. Before you call the API, you read the file and patch it into the system prompt string. That's the whole thing:
+python
+
+core = Path(f"personas/{name}/core.md").read_text()
+
+response = client.chat.completions.create(
+    model="...",
+    messages=[
+        {"role": "system", "content": f"{base_system_prompt}\n\n## Memory\n{core}"},
+        *conversation_history,
+    ]
+)
+
+There's no special mechanism. It's string assembly. The "memory system" is just deciding what to put in that string and keeping the files up to date.
+
+The fuller picture across the three tiers:
+
+    core.md — read unconditionally, prepended to system prompt every call
+    Topic notes — searched on demand, relevant snippets appended to the system prompt (or as a user message before the real user message)
+    Daily log — appended to during the session; consolidated into the other files after
+
+For a project to read: Look at the OpenClaw memory source. It's TypeScript but very readable, and the control flow in memory_search → inject into context is exactly what you want to understand. The docs at docs.openclaw.ai/concepts/memory-builtin.md came up in my search and are unusually clear about the architecture.
+
+For Python specifically, look at Mem0's open source library on GitHub — mem0ai/mem0. The add() / search() / inject pattern is laid out plainly and it's a small codebase. You don't have to use Mem0; just read it to see how a working loop is structured.
+
+Your existing persona_llm.py already constructs the messages list somewhere. The next step is finding that spot and adding the file read there.
+
+Nice to hear.  BTW, Opus built me a lovely tool for Salice using my Brave Search API key. Right now, Sal knows nothing, so everything is a query and the tool presents 5 top hits to the the LLM (I'm quoting Opus) which "chooses one" and rephrases it, supplying that rephrased text as the LLM result. This is either brilliant or a happy accident.  I do not know how the model "chooses one." I remember Opus said "most relevant" even then I don't know how the LLM could do much choosing. I'll have to get one of you to go through the code with me, but not right now. I should get some rest. You've been helpful.
+Exploring how a search tool's result selection actually works.
+
+Rest well. The search tool is neither brilliant nor accident — it's both. The "choosing" is just the model reading all five hits in context and picking the one whose snippet best matches the question, the same way it picks any word. No special mechanism; relevance judgment is what the transformer is doing anyway. The rephrase then launders it into Sal's voice. Elegant use of what was already there.
+
+Enjoy the evening. Come back when you're ready to read that tool code.
+
