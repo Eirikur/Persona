@@ -734,7 +734,8 @@
       flashBubble(msg, true, 4);
       announceReceived(persona, file.name);
     } else {
-      addLogLine('voice', `voice drop failed for ${persona}: ${resp.status}`);
+      const problem = await resp.json().catch(() => ({}));
+      addLogLine('voice', `voice drop refused for ${persona}: ${problem.detail || resp.status}`);
       flashBubble(msg, false, 2);
     }
   }
