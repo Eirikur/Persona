@@ -76,6 +76,7 @@ class Persona:
     provider: str = "cerebras"
     model: str | None = None
     tools: list[str] = field(default_factory=list)   # names into persona_tools.TOOLS
+    font: str = ""    # print font for the bubble text, a path like fonts/dropped/x.ttf; empty = page default
 
 
 @dataclass

@@ -731,8 +731,8 @@
 
   // ── font drop: a persona's "print voice" ──
   // The font is loaded into this page only (FontFace API), so it never
-  // touches the system font list. It lasts until the page is reloaded; the
-  // hub keeps a copy in fonts/dropped/ for reference.
+  // touches the system font list. The hub keeps the file in fonts/dropped/
+  // and remembers it on the persona; the page reloads it from there.
   const personaFontFamily = {};
   let fontDropCount = 0;
 
@@ -743,23 +743,32 @@
     }
   }
 
-  // Load the dropped font, restyle every bubble of that persona, save a copy.
-  async function dropFont(persona, msg, file) {
+  // Load font data (an ArrayBuffer or a "url(...)" string) as the persona's
+  // print font, and restyle every bubble of that persona. Returns false if
+  // the data is not a usable font.
+  async function useFont(persona, source, label) {
     fontDropCount += 1;
-    const family = 'dropped-font-' + fontDropCount;   // fresh name per drop, so re-drops never collide
+    const family = 'dropped-font-' + fontDropCount;   // fresh name per load, so re-drops never collide
 
     try {
-      const face = new FontFace(family, await file.arrayBuffer());
+      const face = new FontFace(family, source);
       await face.load();
       document.fonts.add(face);
     } catch (err) {
-      addLogLine('font', `${file.name} is not a usable font: ${err}`);
-      return;
+      addLogLine('font', `${label} is not a usable font: ${err}`);
+      return false;
     }
 
     personaFontFamily[persona] = family;
     document.querySelectorAll('.message.sal[data-persona="' + persona + '"] .bubble')
       .forEach(el => applyPersonaFont(persona, el));
+    return true;
+  }
+
+  // Load the dropped font, restyle the persona's bubbles, save a copy.
+  async function dropFont(persona, msg, file) {
+    const ok = await useFont(persona, await file.arrayBuffer(), file.name);
+    if (!ok) return;
     addLogLine('font', `${persona} font -> ${file.name}`);
 
     const resp = await fetch(`/font/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
@@ -889,6 +898,11 @@
       .then(s => {
         drawRoster(s.personas || [], s.loaded_personas || []);
         hearingEl.classList.toggle('muted', !!s.muted);
+
+        // Fonts the hub remembers (dropped earlier, or saved by "system persist").
+        for (const [persona, path] of Object.entries(s.fonts || {})) {
+          if (!personaFontFamily[persona]) useFont(persona, "url(" + path + ")", path);
+        }
       });
   }
   loadRoster();

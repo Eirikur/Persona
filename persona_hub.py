@@ -512,6 +512,7 @@ def get_state():
         "model":            persona.model,
         "loaded_personas":  state.loaded_personas,
         "personas":         list(state.personas),
+        "fonts":            {name: p.font for name, p in state.personas.items() if p.font},
     }
 
 
@@ -684,9 +685,9 @@ async def save_font(persona_name: str, request: Request, name: str = ""):
     """
     Keep a copy of a font file dropped onto a persona's bubble.
 
-    The page loads the font itself; this only files it under
-    fonts/dropped/ with a timestamped name. Nothing in state changes, so a
-    dropped font never outlives the page.
+    Files the font under fonts/dropped/ with a timestamped name and records
+    the path on the persona. Like a voice drop it lives in memory until
+    saved, but unlike a voice drop it is not saved here: say "system persist".
     """
     if persona_name not in state.personas:
         raise HTTPException(status_code=404, detail="Unknown persona: " + persona_name)
@@ -700,6 +701,8 @@ async def save_font(persona_name: str, request: Request, name: str = ""):
     stamp     = time.strftime("%Y%m%d-%H%M%S")
     file_name = persona_name + "-" + stamp + "-" + Path(name).stem + extension
     (DROPPED_FONT_DIR / file_name).write_bytes(body)
+
+    state.personas[persona_name].font = "fonts/dropped/" + file_name
 
     print(f"persona {persona_name} font → fonts/dropped/{file_name}")
     return {"persona": persona_name, "saved_file": "fonts/dropped/" + file_name}
