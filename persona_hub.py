@@ -860,4 +860,7 @@ def converse(req: ThinkRequest):
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=PORT)
+    # The chat page holds a live-update connection open, which would make a
+    # stop wait for systemd's 90-second force-kill. Give connections three
+    # seconds to finish, then close them.
+    uvicorn.run(app, host="127.0.0.1", port=PORT, timeout_graceful_shutdown=3)
