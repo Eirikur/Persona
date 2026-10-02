@@ -143,7 +143,8 @@ state          = load()
 # whatever an earlier run saved. Changing it deliberately will be a separate gesture.
 state.loaded_personas = ["default"]
 
-speaking       = False
+speaking       = False   # True from the moment a reply goes out until its audio ends
+playing        = False   # True only once the audio is actually audible (after rendering)
 last_spoke     = 0.0
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
 MUTED          = False     # True = ignore voice input; typed input still goes through
@@ -358,11 +359,12 @@ def say(persona_name: str, text: str) -> None:
     """
     Show text as this persona's reply and speak it in their voice.
 
-    While it plays, `speaking` is True, and afterwards the cooldown runs, so
-    the microphone does not hear the persona and answer itself. Every spoken
+    From now until the audio ends, `speaking` is True (`playing` turns True
+    once rendering is done and sound starts), and afterwards the cooldown
+    runs, so the microphone does not hear the persona and answer itself. Every spoken
     reply goes through here, including the summaries scripts ask for.
     """
-    global speaking, last_spoke
+    global speaking, playing, last_spoke
 
     if not text.strip():
         print(f"persona {persona_name}: empty reply, nothing to say")
@@ -382,7 +384,20 @@ def say(persona_name: str, text: str) -> None:
         print(f"Speech output triggered in {speak_duration:.2f}s")
     finally:
         speaking   = False
+        playing    = False
         last_spoke = time.time()
+
+
+def ignored_reason() -> str:
+    """Say why voice input is being ignored right now: reply still rendering, audio playing, or the cooldown after."""
+    if speaking and not playing:
+        return "while Sal's reply was still rendering (not yet audible)"
+
+    if speaking:
+        return "while Sal was speaking"
+
+    seconds_ago = time.time() - last_spoke
+    return f"in the cooldown, {seconds_ago:.1f}s after Sal stopped speaking"
 
 
 def say_summary(text: str) -> None:
@@ -443,7 +458,7 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     # through, so she can be interrupted by hand.
     if not typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
         print(f"ignored (self-hear): {normalized!r}")
-        emit("ignored", "while Sal was speaking: " + original)
+        emit("ignored", ignored_reason() + ": " + original)
         return [], False
 
     emit("heard", original)
@@ -628,6 +643,8 @@ def playback_start():
     started actually playing, as distinct from sal_turn (text is ready,
     but Chatterbox hasn't rendered it yet) -- the two can be many seconds
     apart on a long reply."""
+    global playing
+    playing = True
     emit("playback_start", "")
     return {"ok": True}
 
