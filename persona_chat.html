@@ -637,6 +637,13 @@
       line.className = 'info';
       header.appendChild(line);
 
+      if (info.file) {
+        const fl = document.createElement('span');
+        fl.className = 'detail file';
+        fl.textContent = info.file;
+        line.appendChild(fl);
+      }
+
       if (info.model) {
         const md = document.createElement('span');
         md.className = 'detail model';
@@ -755,7 +762,8 @@
 
   // The persona acknowledges a file with a bubble of their own.
   function announceReceived(persona, fileName) {
-    addBubble('sal', personaBubbleName(persona), 'I received ' + fileName + '.', null, persona);
+    const stem = fileName.replace(/\.[^.]+$/, '');   // name without its extension
+    addBubble('sal', personaBubbleName(persona), 'I received ' + fileName + '.', {file: stem}, persona);
   }
 
   // ── font drop: a persona's "print voice" ──
