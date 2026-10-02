@@ -69,6 +69,11 @@ LOCAL_PROVIDERS = ("ollama", "echo")
 # available to switch back to.
 DROPPED_VOICE_DIR = Path(__file__).parent / "audio" / "dropped"
 
+# Longest voice sample a drop may carry. The speech engine reads the whole
+# sample into memory: a 35 MB (three-minute) wav grew the speech service to
+# 16 GB and got it killed, while 10 MB samples are fine.
+MAX_VOICE_BYTES = 12_000_000
+
 # Fonts dropped onto a bubble are copied here, same never-overwrite rule.
 # The first four bytes of a font file say what kind it is.
 DROPPED_FONT_DIR = Path(__file__).parent / "fonts" / "dropped"
@@ -345,14 +350,22 @@ def llm(persona: Persona, text: str) -> str:
 
 
 def speak(response_text: str, voice_prompt: str) -> None:
-    """Send text to the speech output service. Silent no-op if service is down."""
+    """
+    Send text to the speech output service.
+
+    If the service is down, dies mid-reply (it has been killed for running
+    out of memory), or times out, say so in the log and carry on: the reply
+    stays on screen and the caller still finishes its turn.
+    """
     try:
         httpx.post(f"{SPEECH_OUTPUT_URL}/speak", timeout=120.0, json={
             "text":         response_text,
             "voice_prompt": voice_prompt,
         }).raise_for_status()
-    except httpx.ConnectError:
-        print("speech output not available")
+    except httpx.HTTPError as problem:
+        reason = type(problem).__name__
+        print(f"speech output failed: {reason} {problem}")
+        emit("log", "speech output failed (" + reason + ") -- no audio for that reply")
 
 
 def say(persona_name: str, text: str) -> None:
@@ -687,6 +700,12 @@ async def set_voice(persona_name: str, request: Request, name: str = ""):
     body = await request.body()
     if body[:4] != b"RIFF":
         raise HTTPException(status_code=400, detail="Not a wav file")
+
+    if len(body) > MAX_VOICE_BYTES:
+        megabytes = len(body) / 1_000_000
+        limit     = MAX_VOICE_BYTES / 1_000_000
+        raise HTTPException(status_code=413,
+                            detail=f"Voice sample is {megabytes:.0f} MB; the limit is {limit:.0f} MB")
 
     DROPPED_VOICE_DIR.mkdir(parents=True, exist_ok=True)
     stamp     = time.strftime("%Y%m%d-%H%M%S")
