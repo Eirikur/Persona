@@ -200,7 +200,7 @@ def emit(event_type: str, text: str, **extra) -> None:
 
 
 def effective_model(persona: Persona) -> str:
-    """The model this persona's replies come from: its own setting, else its provider's default. Empty for echo."""
+    """The model this persona's replies come from: its own setting, else its provider's default ("just an echo" for echo)."""
     return persona.model or DEFAULT_MODELS.get(persona.provider, "")
 
 

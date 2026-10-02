@@ -33,13 +33,14 @@ STATE_FILE = Path.home() / ".config" / "persona" / "state.json"
 
 # The model each provider uses when a persona's model is None. Both the LLM
 # service (to make the call) and the hub (to label the bubble) read this table.
-# "echo" has no model -- it never calls one.
+# "echo" never calls a model; its entry is only the label shown on the bubble.
 DEFAULT_MODELS = {
     "ollama":     "gemma3:12b",
     "openai":     "gpt-4o-mini",
     "cerebras":   "qwen-3.8-27b",
     "perplexity": "sonar",
     "openrouter": "google/gemini-2.0-flash-001",
+    "echo":       "just an echo",
 }
 
 
