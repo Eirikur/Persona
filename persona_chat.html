@@ -64,6 +64,9 @@
     padding: 0 0 0 0;
   }
 
+  /* Wide tabs (see WIDE_TABS in the script) use the whole window. */
+  body.wide #app { max-width: none; }
+
   /* ── header ── */
   #header {
     padding: 8px 24px 6px;
@@ -869,6 +872,17 @@
     settings: 'Persona Settings',
   };
 
+  // The window size each tab is designed for, as [width, height]. Showing a
+  // tab snaps the window to its size, so a size dragged by hand never lingers.
+  // Tabs listed in WIDE_TABS also let the page use the full window width.
+  const TAB_WINDOW_SIZES = {
+    chat:     [1200, 1600],
+    trace:    [1800, 1600],
+    test:     [1200, 1600],
+    settings: [1200, 1600],
+  };
+  const WIDE_TABS = ['trace'];
+
   function activeTabName() {
     return document.querySelector('.tab.active')?.dataset.tab;
   }
@@ -882,6 +896,11 @@
       panel.classList.toggle('active', panelName === name);
     }
     document.title = TAB_TITLES[name];
+    document.body.classList.toggle('wide', WIDE_TABS.includes(name));
+
+    const [width, height] = TAB_WINDOW_SIZES[name];
+    window.resizeTo(width, height);
+
     if (name === 'settings') loadSettings();
   }
 
