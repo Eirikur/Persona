@@ -391,7 +391,7 @@
   /* One green pulse on the bubble a roster click scrolled to. */
   .message.sal.found .bubble { animation: voice-pulse 0.9s ease-in-out 1; }
 
-  /* ── panels (chat / logs / settings) ── */
+  /* ── panels (chat / trace / settings) ── */
   .panel {
     display: none;
     flex: 1;
@@ -401,15 +401,27 @@
 
   .panel.active { display: flex; }
 
-  #panel-logs {
-    padding: 16px 24px;
+  #panel-trace {
+    padding: 14px 24px;
     overflow-y: auto;
     font-family: monospace;
-    font-size: 12px;
-    line-height: 1.7;
-    color: var(--text-muted);
-    white-space: pre-wrap;
+    font-size: 13px;
+    line-height: 1.45;
   }
+
+  /* One trace entry: time, event type, then the detail. Entries are
+     separated by a little space; a long detail wraps under itself,
+     indented past the time, so wrapped text never reads as a new entry. */
+  .trace-line {
+    padding: 2px 0 2px 10ch;
+    text-indent: -10ch;
+    flex: none;
+    white-space: pre-wrap;
+    color: var(--text-info);
+  }
+
+  .trace-time { color: var(--text-dim); }
+  .trace-type { color: var(--accent-sal); }
 
   #panel-settings {
     padding: 22px 24px;
@@ -483,7 +495,7 @@
 
   <div id="tabbar">
     <button class="tab active" data-tab="chat">Chat</button>
-    <button class="tab" data-tab="logs">Logs</button>
+    <button class="tab" data-tab="trace">Trace</button>
     <button class="tab" data-tab="settings">Settings</button>
     <button class="tab" data-tab="test">Test</button>
   </div>
@@ -504,7 +516,7 @@
 
   </div>
 
-  <div id="panel-logs" class="panel">
+  <div id="panel-trace" class="panel">
   </div>
 
   <div id="panel-test" class="panel">
@@ -724,7 +736,7 @@
     const lowerName = file.name.toLowerCase();
     const row = dropHandlers.find(h => h.extensions.some(ext => lowerName.endsWith(ext)));
     if (!row) {
-      addLogLine('drop', `don't know what to do with ${file.name}`);
+      addTraceLine('drop', `don't know what to do with ${file.name}`);
       flashBubble(msg, false, 2);
       return;
     }
@@ -737,12 +749,12 @@
     const resp = await fetch(`/voice/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
     if (resp.ok) {
       const result = await resp.json();
-      addLogLine('voice', `${persona} voice -> ${result.sample_file}`);
+      addTraceLine('voice', `${persona} voice -> ${result.sample_file}`);
       flashBubble(msg, true, 4);
       announceReceived(persona, file.name);
     } else {
       const problem = await resp.json().catch(() => ({}));
-      addLogLine('voice', `voice drop refused for ${persona}: ${problem.detail || resp.status}`);
+      addTraceLine('voice', `voice drop refused for ${persona}: ${problem.detail || resp.status}`);
       flashBubble(msg, false, 2);
     }
   }
@@ -792,7 +804,7 @@
       await face.load();
       document.fonts.add(face);
     } catch (err) {
-      addLogLine('font', `${label} is not a usable font: ${err}`);
+      addTraceLine('font', `${label} is not a usable font: ${err}`);
       return false;
     }
 
@@ -809,11 +821,11 @@
       flashBubble(msg, false, 2);
       return;
     }
-    addLogLine('font', `${persona} font -> ${file.name}`);
+    addTraceLine('font', `${persona} font -> ${file.name}`);
 
     const resp = await fetch(`/font/${encodeURIComponent(persona)}?name=${encodeURIComponent(file.name)}`, {method: 'POST', body: file});
     if (!resp.ok) {
-      addLogLine('font', `font copy not saved for ${persona}: ${resp.status}`);
+      addTraceLine('font', `font copy not saved for ${persona}: ${resp.status}`);
       flashBubble(msg, false, 2);
       return;
     }
@@ -843,7 +855,7 @@
 
   const panels = {
     chat:     document.getElementById('panel-chat'),
-    logs:     document.getElementById('panel-logs'),
+    trace:    document.getElementById('panel-trace'),
     test:     document.getElementById('panel-test'),
     settings: document.getElementById('panel-settings'),
   };
@@ -852,7 +864,7 @@
   // window is identifiable from outside the app (alt-tab, taskbar).
   const TAB_TITLES = {
     chat:     'Persona Chat',
-    logs:     'Persona Logs',
+    trace:    'Persona Trace',
     test:     'Persona Test',
     settings: 'Persona Settings',
   };
@@ -877,18 +889,30 @@
     tab.addEventListener('click', () => showTab(tab.dataset.tab));
   });
 
-  // ── logs panel: every SSE event, shown as a plain scrolling list ──
-  const logPanel     = document.getElementById('panel-logs');
-  const logLines      = [];
-  const MAX_LOG_LINES = 200;
+  // ── trace panel: every SSE event, shown as a plain scrolling list ──
+  const tracePanel     = document.getElementById('panel-trace');
+  const MAX_TRACE_LINES = 2000;
 
-  function addLogLine(type, detail) {
-    const time = new Date().toLocaleTimeString();
-    logLines.push(`${time}  ${type}${detail ? '  ' + detail : ''}`);
-    if (logLines.length > MAX_LOG_LINES) logLines.shift();
-    logPanel.textContent = logLines.join('\n');
-    logPanel.scrollTop = logPanel.scrollHeight;
-    if (activeTabName() !== 'logs') tabByName.logs.classList.add('has-update');
+  function addTraceLine(type, detail) {
+    const line = document.createElement('div');
+    line.className = 'trace-line';
+
+    const time = document.createElement('span');
+    time.className   = 'trace-time';
+    time.textContent = new Date().toLocaleTimeString([], {hour12: false}) + '  ';
+    line.appendChild(time);
+
+    const kind = document.createElement('span');
+    kind.className   = 'trace-type';
+    kind.textContent = type;
+    line.appendChild(kind);
+
+    if (detail) line.appendChild(document.createTextNode('  ' + detail));
+
+    tracePanel.appendChild(line);
+    while (tracePanel.children.length > MAX_TRACE_LINES) tracePanel.firstChild.remove();
+    tracePanel.scrollTop = tracePanel.scrollHeight;
+    if (activeTabName() !== 'trace') tabByName.trace.classList.add('has-update');
   }
 
   // ── settings panel ──
@@ -1024,7 +1048,7 @@
       }
 
       console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
-      addLogLine(type, text || persona || '');
+      addTraceLine(type, text || persona || '');
       if (type === 'heard') {
         preview.textContent = text;
         preview.classList.remove('corrected');
@@ -1066,7 +1090,7 @@
         stateEls.speaking.classList.remove('rendering', 'playing');
         setLive('hearing');
       } else if (type === 'log') {
-        addLogLine('system', text);
+        addTraceLine('system', text);
       } else if (type === 'run_script') {
         // The hub heard a spoken command that names a script (text is the
         // script's name): show the Test tab and run it where it can be seen.
