@@ -71,6 +71,26 @@ LOG_COLORS = {
 LOG_NOISE_WORDS = ("mic_level", "recording_start", "recording_stop", "WriteCMD")
 
 
+# ─── Error Detection ──────────────────────────────────────────────────────────
+
+# A log line or trace entry containing any of these is shown as an error
+# (red band, "!" in the gutter, red tab). Plain text matches, capitals as written.
+ERROR_WORDS = (
+    "ERROR", "Error", "Traceback", "Exception",
+    "failed", "Failed", "killed", "Killed", "OOM", "oom-kill", "Out of memory",
+)
+
+# Text containing any of these is never an error, even if it has an error word.
+# Each is a known harmless message, with the reason beside it.
+ERROR_IGNORE_WORDS = (
+    "timeout graceful shutdown exceeded",   # uvicorn, every time the hub stops with the page open
+)
+
+# Trace event types that carry what people said. Their text is never checked
+# for error words: a sentence that starts with "Error" is only speech.
+SPEECH_EVENT_TYPES = ("heard", "corrected", "user_turn")
+
+
 # ─── Data Classes ─────────────────────────────────────────────────────────────
 
 @dataclass

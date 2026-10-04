@@ -12,6 +12,7 @@ import time
 from collections import deque
 from pathlib import Path
 
+from persona_schemas import ERROR_IGNORE_WORDS, ERROR_WORDS
 from persona_schemas import LOG_COLORS, LOG_NOISE_WORDS, LOG_SOURCES
 
 
@@ -46,6 +47,19 @@ def is_noise(line: str) -> bool:
     return False
 
 
+def looks_like_error(text: str) -> bool:
+    """True if the text has an error word and is not a known harmless message."""
+    for word in ERROR_IGNORE_WORDS:
+        if word in text:
+            return False
+
+    for word in ERROR_WORDS:
+        if word in text:
+            return True
+
+    return False
+
+
 def shorten(line: str) -> str:
     """Boil an access-log line down to "POST /converse 200"; other lines are unchanged."""
     match = re.match(access_line_pattern, line)
@@ -64,6 +78,7 @@ def make_entry(source: str, line: str, when: str) -> dict:
         "full":   line,
         "time":   when,
         "color":  LOG_COLORS.get(source, "#8FA0AE"),
+        "error":  looks_like_error(line),
     }
 
 

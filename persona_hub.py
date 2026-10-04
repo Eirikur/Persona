@@ -31,9 +31,9 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from persona_schemas import DEFAULT_MODELS, Persona, VoiceProfile, load, save
+from persona_schemas import DEFAULT_MODELS, SPEECH_EVENT_TYPES, Persona, VoiceProfile, load, save
 from persona_scripts import SCRIPTS, script_output
-from persona_log_tailer import recent_lines, start_tailing
+from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -200,9 +200,13 @@ async def startup_event():
 
 
 def emit(event_type: str, text: str, **extra) -> None:
-    """Push a generic event to all connected SSE clients."""
+    """Push a generic event to all connected SSE clients, flagged if its text reads as an error."""
     if not event_loop:
         return
+
+    if "error" not in extra:
+        extra["error"] = event_type not in SPEECH_EVENT_TYPES and looks_like_error(text)
+
     data = json.dumps({"type": event_type, "text": text, **extra})
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
@@ -240,7 +244,7 @@ def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str
 def emit_log_line(entry: dict) -> None:
     """Push one new service log line to all connected SSE clients."""
     emit("service_log", entry["text"], source=entry["source"], time=entry["time"],
-         full=entry["full"], color=entry["color"])
+         full=entry["full"], color=entry["color"], error=entry["error"])
 
 
 def emit_mic_level(level: float) -> None:

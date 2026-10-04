@@ -34,6 +34,8 @@
     --text-info:    #8FA0AE;   /* model and voice on the bubble info line */
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
+    --error:        #d9534f;   /* errors only: the "!" and the tab label */
+    --error-band:   rgba(217, 83, 79, 0.16);   /* the row behind an error line */
     --provider-local:  #D0D8DF;   /* plain/white -- runs on this machine */
     --provider-remote: #b8956a;   /* highlight -- left the box over the network */
     --state-live:     #C4CDD5;
@@ -359,7 +361,7 @@
   /* A tab that wants attention (an input was ignored): red label, breathing
      until the tab is shown. */
   .tab.needs-attention {
-    color: #d9534f;
+    color: var(--error);
     animation: breathe 1.2s ease-in-out infinite;
   }
 
@@ -452,6 +454,21 @@
     color: var(--text-info);
   }
 
+  /* An error line: a red band behind the row and a "!" in the gutter. The
+     message text and the source colours stay as they are, so red never
+     reads as a source colour. */
+  .log-line.error,
+  .trace-line.error { background: var(--error-band); }
+
+  .log-flag {
+    flex: none;
+    width: 1ch;
+    color: var(--error);
+    font-weight: bold;
+  }
+
+  .trace-flag { color: var(--error); font-weight: bold; }
+
   .log-time    { flex: none; color: var(--text-dim); }
   .log-source  { flex: none; width: 11ch; }
 
@@ -468,9 +485,11 @@
     overflow-wrap: anywhere;
   }
 
+  .trace-line.error { padding-left: 12ch; text-indent: -12ch; }
+
   .trace-time { color: var(--text-dim); }
   .trace-type { color: var(--accent-sal); }
-  .trace-type.ignored { color: #d9534f; }
+  .trace-type.ignored { color: var(--error); }
 
   #panel-settings {
     padding: 22px 24px;
@@ -940,6 +959,10 @@
     return document.querySelector('.tab.active')?.dataset.tab;
   }
 
+  // The newest unseen error line in the Trace and Logs panels, so showing
+  // that tab scrolls straight to it. Filled in by appendFeedLine.
+  const pendingErrorLine = {trace: null, logs: null};
+
   // Shows one tab. Used by a click on the tab bar, and by the hub when it
   // wants the owner to see something (see the run_script event).
   function showTab(name) {
@@ -955,6 +978,18 @@
     const [width, height] = TAB_WINDOW_SIZES[name];
     window.resizeTo(width, height);
 
+    // A hidden panel loses its scroll position: go to the unseen error if
+    // there is one, else to the newest line.
+    if (name === 'trace' || name === 'logs') {
+      const errorLine = pendingErrorLine[name];
+      if (errorLine && errorLine.isConnected) {
+        errorLine.scrollIntoView({block: 'end'});
+      } else {
+        panels[name].scrollTop = panels[name].scrollHeight;
+      }
+      pendingErrorLine[name] = null;
+    }
+
     if (name === 'settings') loadSettings();
   }
 
@@ -963,7 +998,6 @@
   });
 
   // ── trace panel: every SSE event, shown as a plain scrolling list ──
-  const tracePanel     = document.getElementById('panel-trace');
   const MAX_TRACE_LINES = 2000;
 
   // Persona names as a person's name: first letter capital, rest lowercase.
@@ -981,9 +1015,39 @@
     return result;
   }
 
-  function addTraceLine(type, detail) {
+  // Adds a line to the Trace or Logs panel and decides where to scroll.
+  // A new line only moves the view if you were already at the bottom, so
+  // reading older lines is not interrupted. An error line always scrolls
+  // into view, and if its tab is hidden the tab turns red. isLive is false
+  // for history replayed when the page opens, which never lights the tab.
+  function appendFeedLine(tabName, line, maxLines, isError, isLive) {
+    const panel = panels[tabName];
+    const wasAtBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 40;
+    const shown = activeTabName() === tabName;
+
+    panel.appendChild(line);
+    while (panel.children.length > maxLines) panel.firstChild.remove();
+
+    if (isError) {
+      line.classList.add('error');
+      pendingErrorLine[tabName] = line;
+      if (shown) line.scrollIntoView({block: 'end'});
+      else if (isLive) tabByName[tabName].classList.add('needs-attention');
+    } else if (shown && wasAtBottom) {
+      panel.scrollTop = panel.scrollHeight;
+    }
+  }
+
+  function addTraceLine(type, detail, isError) {
     const line = document.createElement('div');
     line.className = 'trace-line';
+
+    if (isError) {
+      const flag = document.createElement('span');
+      flag.className   = 'trace-flag';
+      flag.textContent = '! ';
+      line.appendChild(flag);
+    }
 
     const time = document.createElement('span');
     time.className   = 'trace-time';
@@ -998,24 +1062,26 @@
 
     if (detail) line.appendChild(document.createTextNode('  ' + humanizeNames(detail)));
 
-    tracePanel.appendChild(line);
-    while (tracePanel.children.length > MAX_TRACE_LINES) tracePanel.firstChild.remove();
-    tracePanel.scrollTop = tracePanel.scrollHeight;
+    appendFeedLine('trace', line, MAX_TRACE_LINES, isError, true);
     if (activeTabName() !== 'trace') tabByName.trace.classList.add('has-update');
     if (type === 'ignored' && activeTabName() !== 'trace') tabByName.trace.classList.add('needs-attention');
   }
 
   // ── logs panel: lines the hub reads from the service log files ──
-  const logsPanel     = document.getElementById('panel-logs');
   const MAX_LOG_LINES = 2000;
 
   // One log line (see .log-line in the CSS). The time is
   // blank for lines that were already in the file when the hub started.
-  function addLogLine(entry) {
+  function addLogLine(entry, isLive) {
     const line = document.createElement('div');
     line.className = 'log-line';
 
     line.style.borderLeftColor = entry.color;
+
+    const flag = document.createElement('span');
+    flag.className   = 'log-flag';
+    flag.textContent = entry.error ? '!' : '';
+    line.appendChild(flag);
 
     const time = document.createElement('span');
     time.className   = 'log-time';
@@ -1039,16 +1105,14 @@
       message.textContent = opening ? entry.full : entry.text;
     });
 
-    logsPanel.appendChild(line);
-    while (logsPanel.children.length > MAX_LOG_LINES) logsPanel.firstChild.remove();
-    logsPanel.scrollTop = logsPanel.scrollHeight;
+    appendFeedLine('logs', line, MAX_LOG_LINES, entry.error, isLive);
   }
 
   // Lines from before this page opened. They come from the hub's memory, so
   // a reload shows the same recent history instead of an empty panel.
   fetch('/logs/recent')
     .then(r => r.json())
-    .then(entries => entries.forEach(addLogLine));
+    .then(entries => entries.forEach(entry => addLogLine(entry, false)));
 
   // ── settings panel ──
   const modeSelect     = document.getElementById('setting-mode');
@@ -1186,12 +1250,12 @@
       // A service log line (not the hub's own "log" events, which go to the Trace).
       if (type === 'service_log') {
         addLogLine({source: data.source, time: data.time, text: text,
-                    full: data.full, color: data.color});
+                    full: data.full, color: data.color, error: data.error}, true);
         return;
       }
 
       console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
-      addTraceLine(type, text || persona || '');
+      addTraceLine(type, text || persona || '', data.error);
       if (type === 'heard') {
         preview.textContent = text;
         preview.classList.remove('corrected');
