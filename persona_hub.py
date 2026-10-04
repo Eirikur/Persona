@@ -150,9 +150,10 @@ BROADCAST_PHRASES = (
 
 state          = load()
 
-# Who is in the chat room is temporary: every start begins with Sal alone,
+# Who is in the chat room is temporary: every start begins with Echo alone,
 # whatever an earlier run saved. Changing it deliberately will be a separate gesture.
-state.loaded_personas = ["default"]
+state.loaded_personas = ["echo"]
+state.active_persona  = "echo"
 
 speaking       = False   # True from the moment a reply goes out until its audio ends
 playing        = False   # True only once the audio is actually audible (after rendering)

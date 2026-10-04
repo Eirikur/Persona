@@ -356,6 +356,13 @@
     margin-left: 5px;
   }
 
+  /* A tab that wants attention (an input was ignored): red label, breathing
+     until the tab is shown. */
+  .tab.needs-attention {
+    color: #d9534f;
+    animation: breathe 1.2s ease-in-out infinite;
+  }
+
   /* ── roster: who's present, shown under the tab bar on every tab ── */
   #roster {
     padding: 8px 24px;
@@ -370,7 +377,7 @@
   .roster-name {
     font-size: 8px;
     letter-spacing: 0.1em;
-    text-transform: uppercase;
+    text-transform: capitalize;
     color: var(--text-info);
     cursor: pointer;
   }
@@ -425,6 +432,7 @@
 
   .trace-time { color: var(--text-dim); }
   .trace-type { color: var(--accent-sal); }
+  .trace-type.ignored { color: #d9534f; }
 
   #panel-settings {
     padding: 22px 24px;
@@ -892,6 +900,7 @@
   function showTab(name) {
     tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     tabByName[name].classList.remove('has-update');
+    tabByName[name].classList.remove('needs-attention');
     for (const [panelName, panel] of Object.entries(panels)) {
       panel.classList.toggle('active', panelName === name);
     }
@@ -912,6 +921,21 @@
   const tracePanel     = document.getElementById('panel-trace');
   const MAX_TRACE_LINES = 2000;
 
+  // Persona names as a person's name: first letter capital, rest lowercase.
+  // knownPersonaNames is filled in by drawRoster.
+  let knownPersonaNames = [];
+
+  function humanizeNames(text) {
+    let result = text;
+    knownPersonaNames.forEach(name => {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp('\\b' + escaped + '\\b', 'gi');
+      const human   = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+      result = result.replace(pattern, human);
+    });
+    return result;
+  }
+
   function addTraceLine(type, detail) {
     const line = document.createElement('div');
     line.className = 'trace-line';
@@ -924,14 +948,16 @@
     const kind = document.createElement('span');
     kind.className   = 'trace-type';
     kind.textContent = type;
+    if (type === 'ignored') kind.classList.add('ignored');
     line.appendChild(kind);
 
-    if (detail) line.appendChild(document.createTextNode('  ' + detail));
+    if (detail) line.appendChild(document.createTextNode('  ' + humanizeNames(detail)));
 
     tracePanel.appendChild(line);
     while (tracePanel.children.length > MAX_TRACE_LINES) tracePanel.firstChild.remove();
     tracePanel.scrollTop = tracePanel.scrollHeight;
     if (activeTabName() !== 'trace') tabByName.trace.classList.add('has-update');
+    if (type === 'ignored' && activeTabName() !== 'trace') tabByName.trace.classList.add('needs-attention');
   }
 
   // ── settings panel ──
@@ -970,6 +996,7 @@
 
   function drawRoster(allNames, loadedNames) {
     rosterLoaded = loadedNames;
+    knownPersonaNames = allNames;
     rosterEl.innerHTML = '';
 
     for (const name of allNames) {
