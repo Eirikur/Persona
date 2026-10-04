@@ -1183,8 +1183,8 @@
         return;
       }
 
-      // A service log line: goes to the Logs tab only, not the Trace.
-      if (type === 'log') {
+      // A service log line (not the hub's own "log" events, which go to the Trace).
+      if (type === 'service_log') {
         addLogLine({source: data.source, time: data.time, text: text,
                     full: data.full, color: data.color});
         return;

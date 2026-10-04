@@ -239,7 +239,7 @@ def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str
 
 def emit_log_line(entry: dict) -> None:
     """Push one new service log line to all connected SSE clients."""
-    emit("log", entry["text"], source=entry["source"], time=entry["time"],
+    emit("service_log", entry["text"], source=entry["source"], time=entry["time"],
          full=entry["full"], color=entry["color"])
 
 
