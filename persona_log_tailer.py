@@ -7,12 +7,14 @@ that it watches for new lines and hands each one to a callback.
 
 
 import re
+import subprocess
 import threading
 import time
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 
-from persona_schemas import ERROR_IGNORE_WORDS, ERROR_WORDS
+from persona_schemas import ERROR_IGNORE_WORDS, ERROR_WORDS, JOURNAL_SOURCE, JOURNAL_UNITS
 from persona_schemas import LOG_COLORS, LOG_NOISE_WORDS, LOG_SOURCES
 
 
@@ -28,6 +30,11 @@ RECENT_LIMIT      = 500          # lines kept for pages that connect later
 # An access-log line such as:
 #   INFO:     127.0.0.1:50166 - "POST /converse HTTP/1.1" 200 OK
 access_line_pattern = r'^INFO:\s+\S+ - "(\w+) (\S+) HTTP/[0-9.]+" (\d+)'
+
+
+# A journal line in short-iso form:
+#   2026-10-04T09:14:28-04:00 strix systemd[2825]: Stopping persona-hub.service...
+journal_line_pattern = r"^(\S+) \S+ \S+: (.*)$"
 
 
 # ─── Recent Lines ─────────────────────────────────────────────────────────────
@@ -147,8 +154,40 @@ def follow_file(source: str, path: Path, on_line) -> None:
             on_line(entry)
 
 
+def follow_journal(on_line) -> None:
+    """Follow the user journal for the Persona units, calling on_line(entry) for each new line.
+
+    journalctl first prints the last few lines it already has; those carry
+    their own timestamps and are only remembered, not announced as new.
+    """
+    started = time.time()
+    command = [
+        "journalctl", "--user", "--follow", "--no-pager",
+        "--lines", str(REPLAY_LINES), "--output", "short-iso",
+        "--unit", JOURNAL_UNITS,
+    ]
+
+    try:
+        process = subprocess.Popen(command, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, text=True, errors="replace")
+    except OSError:
+        return
+
+    for raw in process.stdout:
+        match = re.match(journal_line_pattern, raw.rstrip("\n"))
+        if not match:
+            continue
+
+        stamp, message = match.groups()
+        entry = make_entry(JOURNAL_SOURCE, message, stamp[11:19])
+        recent_lines.append(entry)
+
+        if datetime.fromisoformat(stamp).timestamp() >= started:
+            on_line(entry)
+
+
 def start_tailing(on_line) -> None:
-    """Remember each file's last lines, then follow every log in its own thread."""
+    """Remember each file's last lines, then follow every log and the journal, each in its own thread."""
     for source, file_name in LOG_SOURCES.items():
         path = LOG_DIR / file_name
 
@@ -161,3 +200,5 @@ def start_tailing(on_line) -> None:
             daemon = True,
         )
         thread.start()
+
+    threading.Thread(target=follow_journal, args=(on_line,), daemon=True).start()

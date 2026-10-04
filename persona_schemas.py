@@ -64,7 +64,14 @@ LOG_COLORS = {
     "speech-out": "#D9B35F",   # gold
     "speech-in":  "#5FBFBF",   # teal
     "led-ring":   "#9A8FD6",   # violet
+    "systemd":    "#C8CDD2",   # silver
 }
+
+# The sixth source is not a file: it is the user journal, which holds the
+# lines systemd writes about the Persona services themselves (started,
+# stopped, killed, out of memory). Their own output goes to the files above.
+JOURNAL_SOURCE = "systemd"
+JOURNAL_UNITS  = "persona-*"
 
 # A log line containing any of these is routine chatter (microphone level
 # posts, recording start/stop, LED ring commands) and is not shown.
