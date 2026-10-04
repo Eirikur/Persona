@@ -439,16 +439,34 @@
     line-height: 1.2;
   }
 
+  /* One log line: a stripe in the source's colour, time, source name in a
+     fixed-width column, then the message on a single line cut off with "...".
+     Clicking a line shows the whole original text, wrapped. */
   .log-line {
-    padding: 0;
+    display: flex;
+    gap: 12px;
+    padding-left: 10px;
+    border-left: 3px solid var(--text-dim);
     flex: none;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    cursor: pointer;
     color: var(--text-info);
   }
 
-  .log-time   { color: var(--text-dim); }
-  .log-source { color: var(--accent-sal); }
+  .log-time    { flex: none; color: var(--text-dim); }
+  .log-source  { flex: none; width: 11ch; }
+
+  .log-message {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-line.open .log-message {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 
   .trace-time { color: var(--text-dim); }
   .trace-type { color: var(--accent-sal); }
@@ -991,23 +1009,35 @@
   const logsPanel     = document.getElementById('panel-logs');
   const MAX_LOG_LINES = 2000;
 
-  // One log line: time, which service wrote it, then the text. The time is
+  // One log line (see .log-line in the CSS). The time is
   // blank for lines that were already in the file when the hub started.
   function addLogLine(entry) {
     const line = document.createElement('div');
     line.className = 'log-line';
 
+    line.style.borderLeftColor = entry.color;
+
     const time = document.createElement('span');
     time.className   = 'log-time';
-    time.textContent = (entry.time || '--:--:--') + '  ';
+    time.textContent = entry.time || '--:--:--';
     line.appendChild(time);
 
     const source = document.createElement('span');
     source.className   = 'log-source';
-    source.textContent = entry.source.padEnd(11);
+    source.style.color = entry.color;
+    source.textContent = entry.source;
     line.appendChild(source);
 
-    line.appendChild(document.createTextNode(entry.text));
+    const message = document.createElement('span');
+    message.className   = 'log-message';
+    message.textContent = entry.text;
+    line.appendChild(message);
+
+    line.addEventListener('click', () => {
+      const opening = !line.classList.contains('open');
+      line.classList.toggle('open', opening);
+      message.textContent = opening ? entry.full : entry.text;
+    });
 
     logsPanel.appendChild(line);
     while (logsPanel.children.length > MAX_LOG_LINES) logsPanel.firstChild.remove();
@@ -1155,7 +1185,8 @@
 
       // A service log line: goes to the Logs tab only, not the Trace.
       if (type === 'log') {
-        addLogLine({source: data.source, time: data.time, text: text});
+        addLogLine({source: data.source, time: data.time, text: text,
+                    full: data.full, color: data.color});
         return;
       }
 

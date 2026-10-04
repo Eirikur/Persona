@@ -6,12 +6,13 @@ that it watches for new lines and hands each one to a callback.
 """
 
 
+import re
 import threading
 import time
 from collections import deque
 from pathlib import Path
 
-from persona_schemas import LOG_NOISE_WORDS, LOG_SOURCES
+from persona_schemas import LOG_COLORS, LOG_NOISE_WORDS, LOG_SOURCES
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -21,6 +22,11 @@ REPLAY_LINES      = 50           # lines remembered per file at start
 TAIL_READ_BYTES   = 256 * 1024   # how far back from the end to look for them
 POLL_SECONDS      = 0.5
 RECENT_LIMIT      = 500          # lines kept for pages that connect later
+
+
+# An access-log line such as:
+#   INFO:     127.0.0.1:50166 - "POST /converse HTTP/1.1" 200 OK
+access_line_pattern = r'^INFO:\s+\S+ - "(\w+) (\S+) HTTP/[0-9.]+" (\d+)'
 
 
 # ─── Recent Lines ─────────────────────────────────────────────────────────────
@@ -38,6 +44,27 @@ def is_noise(line: str) -> bool:
         if word in line:
             return True
     return False
+
+
+def shorten(line: str) -> str:
+    """Boil an access-log line down to "POST /converse 200"; other lines are unchanged."""
+    match = re.match(access_line_pattern, line)
+    if not match:
+        return line
+
+    method, path, status = match.groups()
+    return method + " " + path + " " + status
+
+
+def make_entry(source: str, line: str, when: str) -> dict:
+    """Build the dict the page shows for one log line."""
+    return {
+        "source": source,
+        "text":   shorten(line),
+        "full":   line,
+        "time":   when,
+        "color":  LOG_COLORS.get(source, "#8FA0AE"),
+    }
 
 
 def read_last_lines(path: Path) -> list[str]:
@@ -100,11 +127,7 @@ def follow_file(source: str, path: Path, on_line) -> None:
             if not line.strip() or is_noise(line):
                 continue
 
-            entry = {
-                "source": source,
-                "text":   line,
-                "time":   time.strftime("%H:%M:%S"),
-            }
+            entry = make_entry(source, line, time.strftime("%H:%M:%S"))
             recent_lines.append(entry)
             on_line(entry)
 
@@ -115,7 +138,7 @@ def start_tailing(on_line) -> None:
         path = LOG_DIR / file_name
 
         for line in read_last_lines(path):
-            recent_lines.append({"source": source, "text": line, "time": ""})
+            recent_lines.append(make_entry(source, line, ""))
 
         thread = threading.Thread(
             target = follow_file,

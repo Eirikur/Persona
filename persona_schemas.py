@@ -56,6 +56,16 @@ LOG_SOURCES = {
     "led-ring":   "led-ring.log",
 }
 
+# The stripe colour for each source in the Logs tab. Chosen to read on the
+# dark background and to stay clear of red and pink, which are kept for errors.
+LOG_COLORS = {
+    "hub":        "#6FA8DC",   # blue
+    "llm":        "#8FBF7F",   # green
+    "speech-out": "#D9B35F",   # gold
+    "speech-in":  "#5FBFBF",   # teal
+    "led-ring":   "#9A8FD6",   # violet
+}
+
 # A log line containing any of these is routine chatter (microphone level
 # posts, recording start/stop, LED ring commands) and is not shown.
 LOG_NOISE_WORDS = ("mic_level", "recording_start", "recording_stop", "WriteCMD")
