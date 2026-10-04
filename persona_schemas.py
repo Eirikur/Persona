@@ -91,6 +91,7 @@ ERROR_WORDS = (
 # Each is a known harmless message, with the reason beside it.
 ERROR_IGNORE_WORDS = (
     "timeout graceful shutdown exceeded",   # uvicorn, every time the hub stops with the page open
+    "Frame latency is negative",            # Chromium rendering noise from the chat window
 )
 
 # Trace event types that carry what people said. Their text is never checked

@@ -973,6 +973,7 @@
       panel.classList.toggle('active', panelName === name);
     }
     document.title = TAB_TITLES[name];
+    history.replaceState(null, '', '#' + name);
     document.body.classList.toggle('wide', WIDE_TABS.includes(name));
 
     const [width, height] = TAB_WINDOW_SIZES[name];
@@ -1367,6 +1368,11 @@
   scriptButtons.forEach(btn => {
     btn.addEventListener('click', () => runScriptLocked(btn.dataset.script));
   });
+
+  // A reload (Ctrl+R) comes back to the tab it was on: showTab records the
+  // tab name in the URL after the #, and this reads it back.
+  const tabFromUrl = location.hash.slice(1);
+  if (tabFromUrl in panels && tabFromUrl !== 'chat') showTab(tabFromUrl);
 
   // A throwaway tool (persona_screenshot.sh) loads this same page with
   // ?no_shutdown=1 so that closing its tab can't take down the real hub.
