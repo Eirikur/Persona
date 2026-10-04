@@ -44,6 +44,23 @@ DEFAULT_MODELS = {
 }
 
 
+# ─── Log Sources ──────────────────────────────────────────────────────────────
+
+# The service logs the Logs tab follows: source name shown in the tab, mapped
+# to its file in logs/. The tailer only reads these files, never changes them.
+LOG_SOURCES = {
+    "hub":        "hub.log",
+    "llm":        "llm.log",
+    "speech-out": "speech-out.log",
+    "speech-in":  "speech-in.log",
+    "led-ring":   "led-ring.log",
+}
+
+# A log line containing any of these is routine chatter (microphone level
+# posts, recording start/stop, LED ring commands) and is not shown.
+LOG_NOISE_WORDS = ("mic_level", "recording_start", "recording_stop", "WriteCMD")
+
+
 # ─── Data Classes ─────────────────────────────────────────────────────────────
 
 @dataclass

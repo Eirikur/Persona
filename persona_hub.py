@@ -33,6 +33,7 @@ from pydantic import BaseModel
 
 from persona_schemas import DEFAULT_MODELS, Persona, VoiceProfile, load, save
 from persona_scripts import SCRIPTS, script_output
+from persona_log_tailer import recent_lines, start_tailing
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -178,6 +179,8 @@ async def startup_event():
     global event_loop
     event_loop = asyncio.get_running_loop()
 
+    start_tailing(emit_log_line)
+
     # Warmup the active persona's LLM to avoid first-turn latency (e.g. Ollama loading)
     try:
         active_name = state.active_persona
@@ -232,6 +235,11 @@ def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str
     })
     for q in event_queues:
         asyncio.run_coroutine_threadsafe(q.put(data), event_loop)
+
+
+def emit_log_line(entry: dict) -> None:
+    """Push one new service log line to all connected SSE clients."""
+    emit("log", entry["text"], source=entry["source"], time=entry["time"])
 
 
 def emit_mic_level(level: float) -> None:
@@ -588,6 +596,12 @@ def unload_persona(persona_name: str):
     emit("roster", "", loaded_personas=state.loaded_personas)
     print(f"persona {persona_name} left the chat")
     return {"loaded_personas": state.loaded_personas}
+
+
+@app.get("/logs/recent")
+def logs_recent():
+    """The most recent service log lines, oldest first, for a page that just opened."""
+    return list(recent_lines)
 
 
 @app.post("/think")

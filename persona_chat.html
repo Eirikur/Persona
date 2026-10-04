@@ -430,6 +430,26 @@
     color: var(--text-info);
   }
 
+  /* ── logs panel: lines from the service log files ── */
+  #panel-logs {
+    padding: 14px 24px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .log-line {
+    padding: 2px 0;
+    flex: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--text-info);
+  }
+
+  .log-time   { color: var(--text-dim); }
+  .log-source { color: var(--accent-sal); }
+
   .trace-time { color: var(--text-dim); }
   .trace-type { color: var(--accent-sal); }
   .trace-type.ignored { color: #d9534f; }
@@ -507,6 +527,7 @@
   <div id="tabbar">
     <button class="tab active" data-tab="chat">Chat</button>
     <button class="tab" data-tab="trace">Trace</button>
+    <button class="tab" data-tab="logs">Logs</button>
     <button class="tab" data-tab="settings">Settings</button>
     <button class="tab" data-tab="test">Test</button>
   </div>
@@ -528,6 +549,9 @@
   </div>
 
   <div id="panel-trace" class="panel">
+  </div>
+
+  <div id="panel-logs" class="panel">
   </div>
 
   <div id="panel-test" class="panel">
@@ -867,6 +891,7 @@
   const panels = {
     chat:     document.getElementById('panel-chat'),
     trace:    document.getElementById('panel-trace'),
+    logs:     document.getElementById('panel-logs'),
     test:     document.getElementById('panel-test'),
     settings: document.getElementById('panel-settings'),
   };
@@ -876,6 +901,7 @@
   const TAB_TITLES = {
     chat:     'Persona Chat',
     trace:    'Persona Trace',
+    logs:     'Persona Logs',
     test:     'Persona Test',
     settings: 'Persona Settings',
   };
@@ -886,10 +912,11 @@
   const TAB_WINDOW_SIZES = {
     chat:     [1200, 1600],
     trace:    [1800, 1600],
+    logs:     [1800, 1600],
     test:     [1200, 1600],
     settings: [1200, 1600],
   };
-  const WIDE_TABS = ['trace'];
+  const WIDE_TABS = ['trace', 'logs'];
 
   function activeTabName() {
     return document.querySelector('.tab.active')?.dataset.tab;
@@ -959,6 +986,39 @@
     if (activeTabName() !== 'trace') tabByName.trace.classList.add('has-update');
     if (type === 'ignored' && activeTabName() !== 'trace') tabByName.trace.classList.add('needs-attention');
   }
+
+  // ── logs panel: lines the hub reads from the service log files ──
+  const logsPanel     = document.getElementById('panel-logs');
+  const MAX_LOG_LINES = 2000;
+
+  // One log line: time, which service wrote it, then the text. The time is
+  // blank for lines that were already in the file when the hub started.
+  function addLogLine(entry) {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+
+    const time = document.createElement('span');
+    time.className   = 'log-time';
+    time.textContent = (entry.time || '--:--:--') + '  ';
+    line.appendChild(time);
+
+    const source = document.createElement('span');
+    source.className   = 'log-source';
+    source.textContent = entry.source.padEnd(11);
+    line.appendChild(source);
+
+    line.appendChild(document.createTextNode(entry.text));
+
+    logsPanel.appendChild(line);
+    while (logsPanel.children.length > MAX_LOG_LINES) logsPanel.firstChild.remove();
+    logsPanel.scrollTop = logsPanel.scrollHeight;
+  }
+
+  // Lines from before this page opened. They come from the hub's memory, so
+  // a reload shows the same recent history instead of an empty panel.
+  fetch('/logs/recent')
+    .then(r => r.json())
+    .then(entries => entries.forEach(addLogLine));
 
   // ── settings panel ──
   const modeSelect     = document.getElementById('setting-mode');
@@ -1090,6 +1150,12 @@
       // as mic activity rises rather than the other way around.
       if (type === 'mic_level') {
         hearingEl.style.opacity = (1 - 0.7 * level).toFixed(2);
+        return;
+      }
+
+      // A service log line: goes to the Logs tab only, not the Trace.
+      if (type === 'log') {
+        addLogLine({source: data.source, time: data.time, text: text});
         return;
       }
 
