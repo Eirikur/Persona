@@ -15,8 +15,10 @@
 
 """Speech output service for Persona.
 
-This service accepts text from the hub, renders it whole with PocketTTS, and
-plays the result through the system's default audio output.
+This service accepts text from the hub, renders it with PocketTTS in chunks,
+and plays the result through the system's default audio output. While one chunk
+plays, the next is rendering, so sound starts after the first chunk's render
+instead of the whole reply's.
 """
 
 import time
@@ -29,12 +31,30 @@ from fastapi import FastAPI
 from pocket_tts import TTSModel
 from pydantic import BaseModel
 
+from persona_text_chunks import split_into_chunks
+
 
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 PORT                 = 8402
 HUB_URL              = "http://127.0.0.1:8400"
 DEFAULT_VOICE_PROMPT = "audio/bird-dream.wav"
+
+# A reply is rendered and played in chunks of at least this many words. Lower
+# starts sound sooner; higher means fewer, smoother-sounding pieces. Set it
+# very high (1000) to render each reply whole. Chunking was turned off under
+# Chatterbox (7eddf79) because it rendered slower than real time; PocketTTS
+# renders several times faster than playback, so the next chunk is ready in time.
+CHUNK_MIN_WORDS      = 4
+
+# Seconds of silence added after every chunk except the last, so the break
+# between sentences sounds like a breath. 0.0 means no added pause; PocketTTS
+# ends each chunk with only a few frames of tail, which can sound too tight.
+CHUNK_PAUSE          = 0.25
+
+# Set by /stop so chunks that have not played yet are skipped. Cleared at the
+# start of every reply.
+stop_requested = False
 
 
 # ─── Model Loading ───────────────────────────────────────────────────────────
@@ -118,18 +138,24 @@ def render_speech(text: str, voice_prompt: str):
     return MODEL.generate_audio(state, text)
 
 
-def start_playing(wav) -> None:
-    """Begin playing rendered speech and return at once; play continues on its own."""
+def start_playing(wav, pause: float = 0.0) -> None:
+    """Begin playing rendered speech and return at once; play continues on its own. Adds pause seconds of silence at the end."""
 
     audio = np.asarray(wav, dtype=np.float32).reshape(-1)
+
+    if pause > 0:
+        audio = np.concatenate([audio, np.zeros(int(pause * MODEL.sample_rate), dtype=np.float32)])
 
     sd.play(audio, MODEL.sample_rate)
 
 
 @app.post("/stop")
 def stop():
-    """Stop the audio that is currently playing."""
+    """Stop the audio that is currently playing, and skip any chunks still to come."""
 
+    global stop_requested
+
+    stop_requested = True
     sd.stop()
 
     return {"ok": True}
@@ -137,26 +163,43 @@ def stop():
 
 @app.post("/speak")
 def speak(req: SpeakRequest):
-    """Render and play one spoken response."""
+    """Render and play one spoken response, chunk by chunk."""
+
+    global stop_requested
+
+    stop_requested = False
 
     text = normalize_punctuation(req.text)
+    chunks = split_into_chunks(text, CHUNK_MIN_WORDS)
     started = time.time()
+    first_sound = None
 
-    wav = render_speech(text, req.voice_prompt)
-    elapsed = time.time() - started
+    for number, chunk in enumerate(chunks):
+        wav = render_speech(chunk, req.voice_prompt)
 
-    words = len(text.split())
-    print(f"{words} words, {elapsed:.2f}s render, {elapsed / words:.2f}s/word")
+        # sd.play replaces whatever is playing, so let the previous chunk finish.
+        sd.wait()
 
-    try:
-        httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
-    except Exception:
-        pass  # the hub being briefly unavailable shouldn't hold up playback
+        if stop_requested:
+            break
 
-    start_playing(wav)
+        if number == 0:
+            first_sound = time.time() - started
+            try:
+                httpx.post(f"{HUB_URL}/playback_start", timeout=1.0)
+            except Exception:
+                pass  # the hub being briefly unavailable shouldn't hold up playback
+
+        is_last = number == len(chunks) - 1
+        start_playing(wav, 0.0 if is_last else CHUNK_PAUSE)
+
     sd.wait()
 
-    return {"ok": True, "elapsed": elapsed, "words": words}
+    words = len(text.split())
+    print(f"{words} words in {len(chunks)} chunks, first sound after "
+          f"{first_sound if first_sound is not None else 0:.2f}s")
+
+    return {"ok": True, "first_sound": first_sound, "words": words, "chunks": len(chunks)}
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
