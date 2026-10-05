@@ -1,0 +1,80 @@
+{
+  "label": "chunked",
+  "stamp": "2026-10-05-065816",
+  "persona": "default",
+  "provider": "cerebras",
+  "samples": [
+    {
+      "size": "short",
+      "seconds": {
+        "hub routing": 0.01453836499422323,
+        "inference": 1.0214737520000199,
+        "render": 2.406671862001531,
+        "playback": 1.5952414299972588,
+        "total": 5.037925408993033
+      },
+      "missing": [],
+      "words": 3
+    },
+    {
+      "size": "short",
+      "seconds": {
+        "hub routing": 0.007436821993906051,
+        "inference": 0.5320922940009041,
+        "render": 0.4024652780062752,
+        "playback": 1.4632052950037178,
+        "total": 2.405199689004803
+      },
+      "missing": [],
+      "words": 3
+    },
+    {
+      "size": "medium",
+      "seconds": {
+        "hub routing": 0.006960875005461276,
+        "inference": 0.2780037920019822,
+        "render": 0.7700410620018374,
+        "playback": 5.0024488320050295,
+        "total": 6.0574545610143105
+      },
+      "missing": [],
+      "words": 16
+    },
+    {
+      "size": "medium",
+      "seconds": {
+        "hub routing": 0.00759853700583335,
+        "inference": 1.7867665020021377,
+        "render": 0.6505876500013983,
+        "playback": 2.5048794409958646,
+        "total": 4.949832130005234
+      },
+      "missing": [],
+      "words": 9
+    },
+    {
+      "size": "long",
+      "seconds": {
+        "hub routing": 0.007079952003550716,
+        "inference": 0.6022467959992355,
+        "render": 0.7682408330001635,
+        "playback": 28.026008400993305,
+        "total": 29.403575981996255
+      },
+      "missing": [],
+      "words": 88
+    },
+    {
+      "size": "long",
+      "seconds": {
+        "hub routing": 0.008553327003028244,
+        "inference": 0.6199078079953324,
+        "render": 1.689258990008966,
+        "playback": 35.137204650993226,
+        "total": 37.45492477600055
+      },
+      "missing": [],
+      "words": 112
+    }
+  ]
+}
