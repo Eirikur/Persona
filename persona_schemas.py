@@ -99,6 +99,17 @@ ERROR_IGNORE_WORDS = (
 SPEECH_EVENT_TYPES = ("heard", "corrected", "user_turn")
 
 
+# PocketTTS's built-in English voices. A VoiceProfile whose sample_file is one
+# of these names uses the preset instead of a cloned sample file. Spoken
+# commands say "bill boerst"; the hub turns the space into an underscore.
+PRESET_VOICES = (
+    "cosette", "marius", "javert", "alba", "jean", "anna", "vera", "fantine",
+    "charles", "paul", "eponine", "azelma", "george", "mary", "jane",
+    "michael", "eve", "bill_boerst", "peter_yearsley", "stuart_bell",
+    "caro_davy",
+)
+
+
 # ─── Data Classes ─────────────────────────────────────────────────────────────
 
 @dataclass

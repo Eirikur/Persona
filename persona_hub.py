@@ -31,7 +31,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from persona_schemas import DEFAULT_MODELS, SPEECH_EVENT_TYPES, Persona, VoiceProfile, load, save
+from persona_schemas import DEFAULT_MODELS, PRESET_VOICES, SPEECH_EVENT_TYPES, Persona, VoiceProfile, load, save
 from persona_scripts import SCRIPTS, script_output
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
@@ -124,6 +124,10 @@ SCRIPT_PHRASES: dict[str, str] = {
 # Spoken command that writes everything unsaved (dropped fonts, roster changes)
 # into the stored settings. Matched like SCRIPT_PHRASES: at the very start.
 PERSIST_PHRASE = "system persist"
+
+# Spoken command that gives a persona a built-in voice: "system voice sal george".
+# Matched like PERSIST_PHRASE, then the persona name and preset name follow.
+VOICE_PHRASE = "system voice "
 
 # STT mishearing corrections. Applied to every input before dispatch.
 MISHEARINGS: dict[str, str] = {
@@ -510,6 +514,13 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
         emit("log", "settings persisted")
         return [], True
 
+    if spoken_words.startswith(VOICE_PHRASE):
+        words = spoken_words[len(VOICE_PHRASE):].split()
+        reply = voice_command(words)
+        print(reply)
+        emit("log", reply)
+        return [], True
+
     for phrase, script in SCRIPT_PHRASES.items():
         if spoken_words.startswith(phrase):
             print(f"script command: {script!r}")
@@ -751,6 +762,66 @@ async def set_voice(persona_name: str, request: Request, name: str = ""):
 
     print(f"persona {persona_name} voice → audio/dropped/{file_name}")
     return {"persona": persona_name, "sample_file": "audio/dropped/" + file_name}
+
+
+def assign_preset_voice(persona_name: str, preset: str) -> None:
+    """
+    Give a persona one of PocketTTS's built-in voices and save.
+
+    Like a voice drop, the persona gets its own voice profile, so other
+    personas sharing the "default" voice are unaffected. Raises ValueError
+    with a plain message if the persona or the preset is unknown.
+    """
+    if persona_name not in state.personas:
+        raise ValueError("Unknown persona: " + persona_name)
+
+    if preset not in PRESET_VOICES:
+        raise ValueError("Unknown preset voice: " + preset + ". Choices: " + ", ".join(PRESET_VOICES))
+
+    persona = state.personas[persona_name]
+    old     = state.voices.get(persona.voice, state.voices["default"])
+    state.voices[persona_name] = VoiceProfile(
+        name        = persona_name,
+        sample_file = preset,
+        speed       = old.speed,
+        label       = preset,
+    )
+    persona.voice = persona_name
+    save(state)
+
+    print(f"persona {persona_name} voice → preset {preset}")
+
+
+def voice_command(words: list[str]) -> str:
+    """
+    Carry out "system voice <persona> <preset>" and return a line to report.
+
+    words is what follows "system voice": the persona name, then the preset
+    name, which may be several words ("bill boerst" is bill_boerst).
+    """
+    if len(words) < 2:
+        return "Say: system voice, a persona name, then a voice name."
+
+    persona_name = words[0]
+    preset       = "_".join(words[1:])
+
+    try:
+        assign_preset_voice(persona_name, preset)
+    except ValueError as problem:
+        return str(problem)
+
+    return persona_name + " now uses the " + preset + " voice"
+
+
+@app.post("/voice_preset/{persona_name}/{preset}")
+def save_voice_preset(persona_name: str, preset: str):
+    """Give a persona one of PocketTTS's built-in voices (see PRESET_VOICES). Takes effect on its next spoken reply."""
+    try:
+        assign_preset_voice(persona_name, preset)
+    except ValueError as problem:
+        raise HTTPException(status_code=400, detail=str(problem))
+
+    return {"persona": persona_name, "preset": preset}
 
 
 @app.post("/font/{persona_name}")
