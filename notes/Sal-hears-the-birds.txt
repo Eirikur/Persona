@@ -1,0 +1,3 @@
+I was mentally designing a tool for my personas to process audio for me. I thought that LLM --> CLI pipeline would be a clean way to go. Sox is a powerful audio processor. I need to do some work on my voice data. This would work. Then, I ran into this project by accident.
+If you work on audio, this could be a tool for you. Think of an audio editor with an Emacs-like minibuffer CLI.
+
