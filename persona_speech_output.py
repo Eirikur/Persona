@@ -11,17 +11,14 @@
 #    "sounddevice",
 #    "pocket-tts",
 #    "kokoro>=0.9.4",
-#    "torchaudio",
-#    "soundfile",
-#    "coqui-tts[codec]",
-#    "transformers>=4.57,<5",
+#    "transformers>=4.40",
 # ]
 # ///
 
 """Speech output service for Persona.
 
 This service accepts text from the hub, renders it in chunks with PocketTTS
-(or Kokoro and Coqui, for voices written "kokoro:..." and "coqui:..."),
+(or Kokoro, for voices written "kokoro:..."),
 and plays the result through the system's default audio output. While one chunk
 plays, the next is rendering, so sound starts after the first chunk's render
 instead of the whole reply's.
@@ -37,7 +34,6 @@ from fastapi import FastAPI
 from pocket_tts import TTSModel
 from pydantic import BaseModel
 
-import persona_coqui
 import persona_kokoro
 from persona_text_chunks import split_into_chunks
 
@@ -139,13 +135,10 @@ def normalize_punctuation(text: str) -> str:
 
 
 def render_speech(text: str, voice_prompt: str):
-    """Render speech audio for one chunk, with Kokoro, Coqui or PocketTTS depending on the voice."""
+    """Render speech audio for one chunk, with Kokoro or PocketTTS depending on the voice."""
 
     if persona_kokoro.is_kokoro(voice_prompt):
         return persona_kokoro.render(text, voice_prompt)
-
-    if persona_coqui.is_coqui(voice_prompt):
-        return persona_coqui.render(text, voice_prompt)
 
     state = voice_state_for(voice_prompt)
 
@@ -157,9 +150,6 @@ def sample_rate_for(voice_prompt: str) -> int:
 
     if persona_kokoro.is_kokoro(voice_prompt):
         return persona_kokoro.SAMPLE_RATE
-
-    if persona_coqui.is_coqui(voice_prompt):
-        return persona_coqui.SAMPLE_RATE
 
     return MODEL.sample_rate
 
