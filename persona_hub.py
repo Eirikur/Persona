@@ -767,7 +767,8 @@ async def set_voice(persona_name: str, request: Request, name: str = ""):
 def assign_preset_voice(persona_name: str, preset: str) -> None:
     """
     Give a persona one of PocketTTS's built-in voices, or a Kokoro voice
-    written "kokoro:af_bella=0.6,am_adam=0.4", and save.
+    written "kokoro:af_bella=0.6,am_adam=0.4", or a Coqui voice written
+    "coqui:Claribel Dervla", and save.
 
     Like a voice drop, the persona gets its own voice profile, so other
     personas sharing the "default" voice are unaffected. Raises ValueError
@@ -776,10 +777,10 @@ def assign_preset_voice(persona_name: str, preset: str) -> None:
     if persona_name not in state.personas:
         raise ValueError("Unknown persona: " + persona_name)
 
-    is_kokoro = preset.startswith("kokoro:")
+    is_engine_voice = preset.startswith("kokoro:") or preset.startswith("coqui:")
 
-    if not is_kokoro and preset not in PRESET_VOICES:
-        raise ValueError("Unknown preset voice: " + preset + ". Choices: " + ", ".join(PRESET_VOICES) + ", or kokoro:<voice>=<weight>,...")
+    if not is_engine_voice and preset not in PRESET_VOICES:
+        raise ValueError("Unknown preset voice: " + preset + ". Choices: " + ", ".join(PRESET_VOICES) + ", kokoro:<voice>=<weight>,... or coqui:<speaker>")
 
     persona = state.personas[persona_name]
     old     = state.voices.get(persona.voice, state.voices["default"])
