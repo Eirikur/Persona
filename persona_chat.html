@@ -1186,22 +1186,24 @@
   }
   loadRoster();
 
-  // Left click: join the chat if absent, else scroll to their last bubble.
-  // Shift+click toggles presence: removes a present persona, adds an absent one.
-  rosterEl.addEventListener('click', e => {
-    const name = e.target.dataset.persona;
-    if (!name) return;
+  // Click: toggle the persona in or out of the chat.
+  // Double-click: scroll to that persona's last bubble.
+  //
+  // A double-click also delivers two plain clicks first, so a click waits
+  // a moment before it toggles. If a second click or a double-click arrives
+  // in that moment, the waiting toggle is cancelled.
+  const CLICK_WAIT_MS = 250;
+  let pendingToggle   = null;
 
-    if (e.shiftKey && rosterLoaded.includes(name)) {
-      fetch('/persona/' + encodeURIComponent(name) + '/unload', {method: 'POST'});
-      return;
-    }
+  // Add the persona to the chat if absent, remove it if present.
+  function toggleRosterPersona(name) {
+    const action = rosterLoaded.includes(name) ? '/unload' : '/load';
+    fetch('/persona/' + encodeURIComponent(name) + action, {method: 'POST'});
+  }
 
-    if (!rosterLoaded.includes(name)) {
-      fetch('/persona/' + encodeURIComponent(name) + '/load', {method: 'POST'});
-      return;
-    }
-
+  // Scroll to the persona's most recent bubble and flash it. Does nothing
+  // if the persona has not said anything on this page yet.
+  function findLastBubble(name) {
     const bubbles = document.querySelectorAll('.message.sal[data-persona="' + name + '"]');
     const last    = bubbles[bubbles.length - 1];
     if (!last) return;
@@ -1211,6 +1213,22 @@
     void last.offsetWidth;
     last.classList.add('found');
     last.addEventListener('animationend', () => last.classList.remove('found'), {once: true});
+  }
+
+  rosterEl.addEventListener('click', e => {
+    const name = e.target.dataset.persona;
+    if (!name) return;
+
+    clearTimeout(pendingToggle);
+    pendingToggle = setTimeout(() => toggleRosterPersona(name), CLICK_WAIT_MS);
+  });
+
+  rosterEl.addEventListener('dblclick', e => {
+    const name = e.target.dataset.persona;
+    if (!name) return;
+
+    clearTimeout(pendingToggle);
+    findLastBubble(name);
   });
 
   // Right click on a present persona: show the Remove popup at the pointer.
