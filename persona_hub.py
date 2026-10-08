@@ -514,8 +514,12 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     if spoken_words.startswith(PERSIST_PHRASE):
         words = spoken_words[len(PERSIST_PHRASE):].split()
 
+        # "as" is optional: speech recognition often drops it.
         if words[:1] == ["as"]:
-            reply = setup_command(words[1:])
+            words = words[1:]
+
+        if words:
+            reply = setup_command(words)
             print(reply)
             emit("log", reply)
             threading.Thread(target=say_summary, args=(reply,), daemon=True).start()
@@ -809,9 +813,9 @@ def assign_preset_voice(persona_name: str, preset: str) -> None:
 
 def setup_command(words: list[str]) -> str:
     """
-    Carry out "system persist as <name>" and return a line to report.
+    Carry out "system persist [as] <name>" and return a line to report.
 
-    words is what follows "as": the setup name, which may be several words
+    words is the setup name, which may be several words
     ("my news" is saved as my-news). The whole state goes to a named file;
     start Persona from it with: ./persona_start.sh --setup <name>
     """

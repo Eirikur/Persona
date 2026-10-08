@@ -3,7 +3,7 @@
 # Usage: ./persona_start.sh [--no-voice] [--setup NAME]
 #
 # --setup NAME starts Persona from a saved setup (made by saying
-# "system persist as NAME"). The current state.json is kept first as
+# "system persist NAME"). The current state.json is kept first as
 # state-before-setup.json, so nothing is lost.
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
