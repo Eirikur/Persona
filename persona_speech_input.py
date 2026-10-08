@@ -82,6 +82,14 @@ HUB_URL = "http://127.0.0.1:8400"
 STT_MODEL        = "large-v3-turbo"
 SILENCE_DURATION = 0.6
 
+# EXPERIMENT (2026-10-07): how readily the voice-activity detector opens a
+# recording. Higher = more sensitive. Speech counts when Silero's probability
+# exceeds (1 - this), so 0.4 needs 0.6 and 0.25 needs 0.75. Raised the bar
+# because room noise kept opening recordings that Whisper then "heard" as
+# "Thank you." and "Yep.". If quiet speech starts getting missed, move it
+# back toward 0.4.
+SILERO_SENSITIVITY = 0.25
+
 # EXPERIMENT (2026-09-18): Whisper has no reason to guess "Salice" over
 # "Alice"/"Solace" from audio alone, which is why MISHEARINGS has grown so
 # long. faster-whisper's initial_prompt biases the transcription toward
@@ -165,7 +173,7 @@ def _recorder_loop(hub_url: str, stt_model: str, silence_duration: float):
         post_speech_silence_duration=silence_duration if not TEST_MODE else 0.1,
         enable_realtime_transcription=True,
         use_microphone=not TEST_MODE,
-        silero_sensitivity=0.1 if TEST_MODE else 0.4,
+        silero_sensitivity=0.1 if TEST_MODE else SILERO_SENSITIVITY,
         initial_prompt=WAKE_WORD_PROMPT,
         initial_prompt_realtime=WAKE_WORD_PROMPT,
         on_recording_start=on_recording_start,
