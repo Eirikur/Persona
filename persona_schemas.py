@@ -44,6 +44,27 @@ DEFAULT_MODELS = {
 }
 
 
+# ─── News Sources ─────────────────────────────────────────────────────────────
+
+# The news command-line tools persona_tools.news_read can run. Each entry names
+# the program, the environment variable (set in .env) that may hold its full
+# path, and the sections it knows. The program is looked up on PATH when the
+# environment variable is not set. To add a source, install its program and
+# add one entry here.
+NEWS_SOURCES = {
+    "bbc": {
+        "program":  "bbc",
+        "env_var":  "BBC_BIN",
+        "sections": ("top", "world", "uk", "tech", "science", "health",
+                     "business", "entertainment", "sport", "politics"),
+    },
+}
+
+# The most headlines news_read will return in one call. A voice assistant
+# cannot read out more than this before the listener loses the thread.
+NEWS_MAX_ITEMS = 8
+
+
 # ─── Log Sources ──────────────────────────────────────────────────────────────
 
 # The service logs the Logs tab follows: source name shown in the tab, mapped
