@@ -377,12 +377,15 @@
   /* Present in the chat: brighter. Not present: dim. Click to join or to
      find their last bubble; right-click for the Remove popup. */
   .roster-name {
-    font-size: 8px;
+    font-size: 9px;            /* same as .tab, the bar just above */
     letter-spacing: 0.1em;
     text-transform: capitalize;
     color: var(--text-info);
     cursor: pointer;
   }
+
+  /* The capital letter that starts each persona's name is half again as big. */
+  .roster-name::first-letter { font-size: 1.5em; }
 
   .roster-name.absent { color: var(--text-dim); }
 
@@ -857,10 +860,11 @@
   const personaFontFamily = {};
   let fontDropCount = 0;
 
-  // Put the persona's dropped font (if any) on one bubble's text.
-  function applyPersonaFont(persona, bubbleEl) {
+  // Put the persona's dropped font (if any) on one element's text: a
+  // bubble, or the persona's name in the roster strip.
+  function applyPersonaFont(persona, el) {
     if (personaFontFamily[persona]) {
-      bubbleEl.style.fontFamily = "'" + personaFontFamily[persona] + "', serif";
+      el.style.fontFamily = "'" + personaFontFamily[persona] + "', serif";
     }
   }
 
@@ -882,6 +886,8 @@
 
     personaFontFamily[persona] = family;
     document.querySelectorAll('.message.sal[data-persona="' + persona + '"] .bubble')
+      .forEach(el => applyPersonaFont(persona, el));
+    document.querySelectorAll('.roster-name[data-persona="' + persona + '"]')
       .forEach(el => applyPersonaFont(persona, el));
     return true;
   }
@@ -1160,6 +1166,7 @@
       if (!loadedNames.includes(name)) el.classList.add('absent');
       el.textContent = personaDisplayName(name);
       el.dataset.persona = name;
+      applyPersonaFont(name, el);
       rosterEl.appendChild(el);
     }
   }
