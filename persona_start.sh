@@ -1,13 +1,37 @@
 #!/bin/bash
 
+# Usage: ./persona_start.sh [--no-voice] [--setup NAME]
+#
+# --setup NAME starts Persona from a saved setup (made by saying
+# "system persist as NAME"). The current state.json is kept first as
+# state-before-setup.json, so nothing is lost.
+
 DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG_DIR="$HOME/.config/persona"
 
 NO_VOICE=0
-for arg in "$@"; do
-    case "$arg" in
+SETUP=""
+while [ $# -gt 0 ]; do
+    case "$1" in
         --no-voice)  NO_VOICE=1 ;;
+        --setup)
+            SETUP="$2"
+            if [ -z "$SETUP" ]; then
+                echo "--setup needs a name."
+                exit 1
+            fi
+            shift
+            ;;
     esac
+    shift
 done
+
+# Check the setup exists before stopping anything
+if [ -n "$SETUP" ] && [ ! -f "$CONFIG_DIR/setups/$SETUP.json" ]; then
+    echo "No setup named '$SETUP'. Saved setups:"
+    ls "$CONFIG_DIR/setups" 2>/dev/null | sed 's/\.json$//' | sed 's/^/  /'
+    exit 1
+fi
 
 # Ensure systemd knows about the units
 systemctl --user daemon-reload
@@ -18,6 +42,13 @@ for port in 8400 8401 8402 8403; do
 done
 
 sleep 1
+
+# Put the chosen setup in place now that the hub is stopped
+if [ -n "$SETUP" ]; then
+    cp "$CONFIG_DIR/state.json" "$CONFIG_DIR/state-before-setup.json" 2>/dev/null
+    cp "$CONFIG_DIR/setups/$SETUP.json" "$CONFIG_DIR/state.json"
+    echo "Starting from setup: $SETUP"
+fi
 
 # Start Core Services
 systemctl --user restart persona-llm.service

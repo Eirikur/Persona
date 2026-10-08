@@ -20,6 +20,7 @@ beyond reading and writing state.
 
 
 import json
+import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -227,3 +228,27 @@ def save(state: GlobalState) -> None:
     """Write state to disk, creating the config directory if needed."""
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(asdict(state), indent=2))
+
+
+# ─── Setups ───────────────────────────────────────────────────────────────────
+
+# A setup is a named copy of the whole system state, in the same format as
+# state.json. Say "system persist as <name>" to save one. To start Persona
+# from one, run: ./persona_start.sh --setup <name>
+SETUP_DIR = Path.home() / ".config" / "persona" / "setups"
+
+
+def clean_setup_name(spoken: str) -> str:
+    """Turn spoken words into a safe file name: lowercase letters and digits,
+    with a single hyphen between words. "My News Setup" becomes "my-news-setup".
+    Returns an empty string if nothing usable is left."""
+    not_a_letter_or_digit = r"[^a-z0-9]+"
+    return re.sub(not_a_letter_or_digit, "-", spoken.lower()).strip("-")
+
+
+def save_setup(state: GlobalState, name: str) -> Path:
+    """Write the whole state to a named setup file and return its path."""
+    SETUP_DIR.mkdir(parents=True, exist_ok=True)
+    path = SETUP_DIR / (name + ".json")
+    path.write_text(json.dumps(asdict(state), indent=2))
+    return path

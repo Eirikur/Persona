@@ -31,7 +31,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from persona_schemas import DEFAULT_MODELS, PRESET_VOICES, SPEECH_EVENT_TYPES, Persona, VoiceProfile, load, save
+from persona_schemas import (
+    DEFAULT_MODELS, PRESET_VOICES, SPEECH_EVENT_TYPES, Persona, VoiceProfile,
+    clean_setup_name, load, save, save_setup,
+)
 from persona_scripts import SCRIPTS, script_output
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
@@ -509,6 +512,15 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     spoken_words = " ".join(re.sub(not_a_word, " ", normalized).split())
 
     if spoken_words.startswith(PERSIST_PHRASE):
+        words = spoken_words[len(PERSIST_PHRASE):].split()
+
+        if words[:1] == ["as"]:
+            reply = setup_command(words[1:])
+            print(reply)
+            emit("log", reply)
+            threading.Thread(target=say_summary, args=(reply,), daemon=True).start()
+            return [], True
+
         save(state)
         print("state persisted")
         emit("log", "settings persisted")
@@ -793,6 +805,23 @@ def assign_preset_voice(persona_name: str, preset: str) -> None:
     save(state)
 
     print(f"persona {persona_name} voice → preset {preset}")
+
+
+def setup_command(words: list[str]) -> str:
+    """
+    Carry out "system persist as <name>" and return a line to report.
+
+    words is what follows "as": the setup name, which may be several words
+    ("my news" is saved as my-news). The whole state goes to a named file;
+    start Persona from it with: ./persona_start.sh --setup <name>
+    """
+    name = clean_setup_name(" ".join(words))
+    if not name:
+        return "Say: system persist as, then a name for the setup."
+
+    path = save_setup(state, name)
+    print("setup written to " + str(path))
+    return "Saved setup " + name
 
 
 def voice_command(words: list[str]) -> str:
