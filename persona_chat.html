@@ -1305,6 +1305,12 @@
             if (currentState === 'transcribing') setLive('hearing');
           }, TRANSCRIBE_GIVE_UP_MS);
         }
+      } else if (type === 'ignored') {
+        // The hub threw the transcript away (most often the persona's own
+        // voice, picked up by the mic). Nothing will follow, so go straight
+        // back to HEARING instead of waiting out TRANSCRIBE_GIVE_UP_MS.
+        clearTimeout(transcribeTimer);
+        if (currentState === 'transcribing') setLive('hearing');
       } else if (type === 'heard') {
         preview.textContent = text;
         preview.classList.remove('corrected');
