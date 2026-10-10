@@ -110,3 +110,22 @@ is what routing depends on.
 
 **Switched to medium.en** (speech-in restarted ~11:20). persona_stt_check.py on
 the standard clip: 2.03 s median (endpoint 1.03 + decode 1.01), was 3.64 s.
+
+## Self-hear rule and persona_turn rename (afternoon)
+
+- 30979d3: the hub now ignores a voice transcript only if its recording
+  began while a persona was talking or within `SELF_HEAR_MARGIN` (1 s)
+  after, or a persona is talking when the text arrives. Replaces the 8 s
+  `SPEAK_COOLDOWN`, which discarded the owner's quick replies (live trace:
+  "ok" 7.5 s after Echo stopped). Trace lines name the persona
+  (`display_name()`, `last_speaker`). Tests: `tests/test_self_hear.py`
+  (8 cases, no services; first of the fast service-free tests).
+- Still lost: anything said *over* a persona (recording starts while it
+  talks). Owner does not want the ReSpeaker's echo cancellation (extra desk
+  wiring). Candidates: longer `SILENCE_DURATION` so mid-sentence pauses
+  don't end the turn, or the hold-and-replay queue.
+- 138856f: event `sal_turn` renamed `persona_turn` (hub, chat page, LED
+  ring, pipeline check). Hub + LED ring restarted ~12:20; mute and open
+  mode re-applied by hand afterwards.
+- Known small bug: the chat page doesn't read the hub's mute state on load,
+  so after a reload HEARING can look unmuted while the hub is muted.
