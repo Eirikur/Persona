@@ -688,12 +688,18 @@ def set_mute(setting: str):
     Mute or unmute voice input. Muted voice input is ignored before it
     reaches dispatch, so it never triggers an LLM response or speech.
     Typed input (the chat box, the Test button) always goes through.
+
+    The hub is the one place mute is kept. Every change is announced as a
+    "mute" event ("on" or "off"), so the chat page and the LED ring always
+    show the hub's real setting rather than their own guess.
     """
     global MUTED
     if setting not in {"on", "off"}:
         return {"error": f"unknown mute setting {setting!r}"}
     MUTED = (setting == "on")
     print(f"muted → {MUTED}")
+
+    emit("mute", setting)
     return {"muted": MUTED}
 
 
