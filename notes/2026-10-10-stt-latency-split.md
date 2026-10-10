@@ -155,3 +155,10 @@ Correction: the page *did* read `muted` on load (loadRoster); the real gaps
 were no event on change and no re-check on reconnect. The "mute seemed
 ignored" episode (11:46-11:58) was Claude unmuting the hub by curl while the
 page showed muted; the event closes that gap.
+
+**Compact trace (12:20):** `COMPACT_RECORDINGS = true` in persona_chat.html
+merges each recording_start/stop pair into one "recording 9.2 s" line
+(rewritten in place when the stop arrives) and shows transcribe time on
+"heard" lines: "heard  (1.0 s)  text". Set false for one line per event.
+Page-only change: Ctrl+R, no restart. Owner may later want a start-script
+flag (--suppress-duplicate-recording-msgs) or a Settings checkbox for it.

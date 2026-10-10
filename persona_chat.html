@@ -1035,6 +1035,15 @@
   // ── trace panel: every SSE event, shown as a plain scrolling list ──
   const MAX_TRACE_LINES = 2000;
 
+  // true = each recording_start/recording_stop pair becomes one line that
+  // ends up reading "recording 9.2 s", and each "heard" line shows how long
+  // transcribing took: "heard  (1.0 s)  text". false = one line per event.
+  const COMPACT_RECORDINGS = true;
+
+  let openRecordingLine = null;   // the trace line of a recording still in progress
+  let recordingStartedAt = 0;     // Date.now() when it started
+  let recordingStoppedAt = 0;     // Date.now() when the last recording stopped; 0 once its text is shown
+
   // Persona names as a person's name: first letter capital, rest lowercase.
   // knownPersonaNames is filled in by drawRoster.
   let knownPersonaNames = [];
@@ -1100,6 +1109,49 @@
     appendFeedLine('trace', line, MAX_TRACE_LINES, isError, true);
     if (activeTabName() !== 'trace') tabByName.trace.classList.add('has-update');
     if (type === 'ignored' && activeTabName() !== 'trace') tabByName.trace.classList.add('needs-attention');
+
+    return line;
+  }
+
+  // Seconds since a Date.now() reading, as "9.2 s".
+  function secondsSince(startedAt) {
+    return ((Date.now() - startedAt) / 1000).toFixed(1) + ' s';
+  }
+
+  // The COMPACT_RECORDINGS version of the trace for the three events it
+  // changes. Returns true if it wrote the line, false to let the normal
+  // one-line-per-event trace handle it.
+  function addCompactTraceLine(type, text) {
+    if (!COMPACT_RECORDINGS) return false;
+
+    if (type === 'recording_start') {
+      recordingStartedAt = Date.now();
+      openRecordingLine  = addTraceLine('recording', '…');
+      return true;
+    }
+
+    if (type === 'recording_stop' && openRecordingLine) {
+      // Rewrite the start's line in place; its last piece is the detail text.
+      openRecordingLine.lastChild.textContent = '  ' + secondsSince(recordingStartedAt);
+      openRecordingLine  = null;
+      recordingStoppedAt = Date.now();
+      return true;
+    }
+
+    // Only time a "heard" that follows its recording closely: typed input is
+    // "heard" too, and a noise recording that produced no words leaves an
+    // old stop time behind.
+    const recentStop = recordingStoppedAt && Date.now() - recordingStoppedAt < 15000;
+
+    if (type === 'heard' && recentStop) {
+      addTraceLine('heard', '(' + secondsSince(recordingStoppedAt) + ')  ' + text);
+      recordingStoppedAt = 0;
+      return true;
+    }
+
+    if (type === 'ignored') recordingStoppedAt = 0;   // that recording's text was dropped instead
+
+    return false;
   }
 
   // ── logs panel: lines the hub reads from the service log files ──
@@ -1312,7 +1364,10 @@
       }
 
       console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
-      addTraceLine(type, text || persona || '', data.error);
+      if (!addCompactTraceLine(type, text)) {
+        addTraceLine(type, text || persona || '', data.error);
+      }
+
       if (type === 'recording_start') {
         recordingBeganWhileBusy = currentState !== 'hearing';
       } else if (type === 'recording_stop') {
