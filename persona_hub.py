@@ -46,7 +46,11 @@ LLM_URL           = "http://127.0.0.1:8401"
 SPEECH_OUTPUT_URL = "http://127.0.0.1:8402"
 SPEECH_INPUT_URL  = "http://127.0.0.1:8403"
 
-SPEAK_COOLDOWN  = 8.0
+# A recording that starts within this long after a persona stops talking
+# still counts as hearing the persona: the last word may still be leaving
+# the speaker, and the voice detector opens a moment after sound begins.
+SELF_HEAR_MARGIN = 1.0   # seconds
+
 SUMMARY_SPEAKER = "system"   # persona whose voice speaks script results (SAY: lines)
 SHUTDOWN_GRACE  = 2.0   # seconds to wait for a reload's SSE reconnect before really shutting down
 
@@ -166,6 +170,16 @@ state.active_persona  = "echo"
 speaking       = False   # True from the moment a reply goes out until its audio ends
 playing        = False   # True only once the audio is actually audible (after rendering)
 last_spoke     = 0.0
+last_speaker   = "Sal"     # display name of the persona who spoke most recently
+
+# Self-hear verdicts. A recording that began while a persona was talking (or
+# just after) has the persona's voice in it, so its transcript is ignored.
+# The verdict is taken when the recording starts and handed on when it stops,
+# because the transcript arrives after the stop -- by then a new recording
+# may already have started.
+recording_heard_persona = False   # the recording in progress
+finished_heard_persona  = False   # the last recording that ended (its text comes next)
+
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
 MUTED          = False     # True = ignore voice input; typed input still goes through
 shutdown_timer = None      # pending threading.Timer, or None if no shutdown is queued
@@ -228,6 +242,16 @@ def effective_model(persona: Persona) -> str:
 def voice_label(voice: VoiceProfile) -> str:
     """The name shown on the bubble: the voice's label if it has one, else its sample file name without directory or extension."""
     return voice.label or Path(voice.sample_file or DEFAULT_VOICE_SAMPLE).stem
+
+
+def display_name(persona_name: str) -> str:
+    """What the owner calls a persona: "Sal" for the internal key "default",
+    otherwise the key with a capital letter. Matches personaDisplayName() in
+    persona_chat.html."""
+    if persona_name == "default":
+        return "Sal"
+
+    return persona_name.capitalize()
 
 
 def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str) -> None:
@@ -400,11 +424,13 @@ def say(persona_name: str, text: str) -> None:
     Show text as this persona's reply and speak it in their voice.
 
     From now until the audio ends, `speaking` is True (`playing` turns True
-    once rendering is done and sound starts), and afterwards the cooldown
-    runs, so the microphone does not hear the persona and answer itself. Every spoken
-    reply goes through here, including the summaries scripts ask for.
+    once rendering is done and sound starts), and afterwards the time it
+    stopped is noted. Together these let recording_start() tell when the
+    microphone is hearing the persona, so it does not answer itself (see
+    SELF_HEAR_MARGIN). Every spoken reply goes through here, including the
+    summaries scripts ask for.
     """
-    global speaking, playing, last_spoke
+    global speaking, playing, last_spoke, last_speaker
 
     if not text.strip():
         print(f"persona {persona_name}: empty reply, nothing to say")
@@ -414,7 +440,8 @@ def say(persona_name: str, text: str) -> None:
     voice   = state.voices.get(persona.voice, state.voices["default"])
 
     emit_sal(persona_name, text, persona.provider, effective_model(persona), voice_label(voice))
-    speaking = True
+    speaking     = True
+    last_speaker = display_name(persona_name)
 
     try:
         # Time speech synthesis
@@ -429,15 +456,15 @@ def say(persona_name: str, text: str) -> None:
 
 
 def ignored_reason() -> str:
-    """Say why voice input is being ignored right now: reply still rendering, audio playing, or the cooldown after."""
+    """Say why voice input is being ignored right now: reply still rendering,
+    audio playing, or the recording began while the persona was talking."""
     if speaking and not playing:
-        return "while Sal's reply was still rendering (not yet audible)"
+        return "while " + last_speaker + "'s reply was still rendering (not yet audible)"
 
     if speaking:
-        return "while Sal was speaking"
+        return "while " + last_speaker + " was speaking"
 
-    seconds_ago = time.time() - last_spoke
-    return f"in the cooldown, {seconds_ago:.1f}s after Sal stopped speaking"
+    return "recording began while " + last_speaker + " was speaking, or just after"
 
 
 def say_summary(text: str) -> None:
@@ -492,11 +519,12 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
         httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
         return [], True
 
-    # Sal's own voice reaching the mic while she's talking, or just after,
-    # would otherwise be free to trigger COMMANDS, scripts, or a reply to
-    # herself -- "stop" above is the one voice command that must still get
-    # through, so she can be interrupted by hand.
-    if not typed and (speaking or (time.time() - last_spoke < SPEAK_COOLDOWN)):
+    # A persona's own voice reaching the mic -- a persona is talking now, or
+    # this recording began while one was (see recording_start) -- would
+    # otherwise be free to trigger COMMANDS, scripts, or a reply to itself.
+    # "stop" above is the one voice command that must still get through, so
+    # a persona can be interrupted by hand.
+    if not typed and (speaking or finished_heard_persona):
         print(f"ignored (self-hear): {normalized!r}")
         emit("ignored", ignored_reason() + ": " + original)
         return [], False
@@ -582,7 +610,7 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
 
 class ThinkRequest(BaseModel):
     text: str
-    typed: bool = False    # True = from chat box, skips the cooldown gate
+    typed: bool = False    # True = from chat box, skips the self-hear gate
     speaker: str = "you"   # chat-bubble label for this input; overridden by e.g. the test trigger
 
 
@@ -680,7 +708,13 @@ def mic_level(value: float):
 @app.post("/recording_start")
 def recording_start():
     """Relay the STT recorder's VAD signal that real speech has begun, so the
-    LED ring can leave DOA hunting and show it's actively listening."""
+    LED ring can leave DOA hunting and show it's actively listening. Also notes
+    whether a persona was talking as it began, so its transcript can be judged."""
+    global recording_heard_persona
+
+    just_stopped = time.time() - last_spoke < SELF_HEAR_MARGIN
+    recording_heard_persona = speaking or just_stopped
+
     emit("recording_start", "")
     return {"ok": True}
 
@@ -689,7 +723,12 @@ def recording_start():
 def recording_stop():
     """Relay the matching VAD signal that speech has ended, whether or not a
     transcript follows -- lets the LED ring fall back to DOA hunting even if
-    the speech didn't turn into a transcribed "heard" event."""
+    the speech didn't turn into a transcribed "heard" event. The transcript that
+    follows belongs to this recording, so its self-hear verdict is handed on."""
+    global finished_heard_persona
+
+    finished_heard_persona = recording_heard_persona
+
     emit("recording_stop", "")
     return {"ok": True}
 
