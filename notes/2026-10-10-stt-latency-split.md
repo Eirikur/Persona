@@ -14,7 +14,15 @@ only after Whisper has finished. The hub already emits `recording_stop` (the
 moment transcription begins) but the state strip ignores it. So HEARING stays
 lit through the whole endpoint + decode wait, then TRANSCRIBING flashes with
 the text already in hand and is held for a 2-second minimum (`minEndTime`),
-which can also hold back INFERENCE and SPEAKING. Not fixed yet.
+which can also hold back INFERENCE and SPEAKING.
+
+**Fixed in b2d59b0:** TRANSCRIBING now lights on `recording_stop` (only from
+HEARING and not muted, so the persona's own voice can't knock SPEAKING off),
+and falls back to HEARING after `TRANSCRIBE_GIVE_UP_MS` (6 s) if nothing
+follows. Checked in headless Chromium against a hub-only stack. Not yet seen
+by the owner on the live window. The 2 s `minEndTime` hold is unchanged; it
+now starts earlier, so it rarely delays INFERENCE. Revisit if the model
+switch makes decode much shorter than 2 s.
 
 ## Finding 2: measured split (persona_stt_check.py, 5 rounds each)
 
@@ -54,7 +62,7 @@ text, and compare models on word errors as well as time.
 
 ## Next steps (proposed, not started)
 
-1. UI: light TRANSCRIBING on `recording_stop`; reconsider the 2 s hold.
+1. ~~UI: light TRANSCRIBING on `recording_stop`~~ done (b2d59b0).
 2. Accuracy corpus + make the check take a model name and several clips.
 3. Decide model (small.en / medium.en / distil) from corpus numbers.
 4. Voice-path bench through the live stack (stop talking -> first sound).
