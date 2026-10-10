@@ -76,3 +76,34 @@ text, and compare models on word errors as well as time.
 3. Decide model (small.en / medium.en / distil) from corpus numbers.
 4. Voice-path bench through the live stack (stop talking -> first sound).
 5. Later: Whisper on the GPU (needs a ROCm-capable backend), endpoint tuning.
+
+## Model comparison on the owner's own recordings (11:12)
+
+Test set: `tests/stt_corpus/` (16 clips recorded with
+`tests/stt_corpus_record.py`: 14 sentences on the ReSpeaker with heavy
+traffic noise, plus 28 s and 65 s of room noise only). Not committed: the
+owner hasn't decided whether recordings of their voice go into git.
+Run: `HF_HOME=~/.cache/huggingface HF_HUB_OFFLINE=1 ./persona_stt_compare.py`
+(live speech-in was running, so delays are slightly slower than quiet).
+Raw results: `tests/stt_corpus_results/2026-10-10-111206.json`.
+
+The owner improvised on most sentences, so the reference texts were then
+rewritten to the wording the models agreed on (owner: "assume improvs"),
+and the saved results rescored:
+
+| Model          | Words wrong (of 123) | Median decode | Worst  |
+|----------------|----------------------|---------------|--------|
+| large-v3-turbo | 3 ("Hal"->"Now", "Sal"->"So", "shims"->"streams") | 3.26 s | 3.56 s |
+| medium.en      | 1 ("Hal"->"Hell")    | 1.05 s        | 1.51 s |
+| small.en       | 3 ("Sal"->"So", dropped "So", "shims"->"streams") | 0.39 s | 0.61 s |
+
+- Noise clips: no model invented a single word; VAD at 0.25 never even
+  opened a recording, including the loud 65 s stretch.
+- Clip 13 (deliberate pause after "remind me"): every model split it into
+  two pieces. Live, that is two turns. `SILENCE_DURATION` (0.6 s) decides.
+- Caveat: references came from model consensus, so this measures agreement
+  as much as truth; 13 sentences, one speaker, one run each.
+
+Recommendation: medium.en. Most accurate here, and ~2.2 s faster per turn.
+small.en saves another ~0.7 s but turned "Sal" into "So", and the wake name
+is what routing depends on. Not switched yet.
