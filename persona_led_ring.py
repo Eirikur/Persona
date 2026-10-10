@@ -61,6 +61,11 @@ STATE_LOOKS = {
     "speaking":     {"effect": EFFECT_BREATH, "color": 0x00AA00, "speed": 3},   # green, breathing -- audibly talking
 }
 
+# Solid, full-brightness red while HEARING is muted: "You're on mute!" It
+# replaces every other look until the hub says mute is off, and it never
+# blinks. LISTENING's red is deliberately dimmer (0x880000) and blinks.
+MUTED_LOOK = {"effect": EFFECT_SINGLE, "color": 0xFF0000}
+
 # Static-color states that should blink -- reissue their own look's command --
 # each time a mic_level (HEARING) event comes in, so the ring visibly pulses
 # along with live mic activity the same way the chat UI's HEARING label does.
@@ -108,6 +113,22 @@ class LedRing:
         self.current_look = look
 
 
+def look_for(state: str, muted: bool) -> dict:
+    """The look to show: red while muted, otherwise the pipeline state's own look."""
+    if muted:
+        return MUTED_LOOK
+
+    return STATE_LOOKS[state]
+
+
+def hub_is_muted() -> bool:
+    """Ask the hub whether voice input is muted. Checked each time the ring
+    (re)connects, since a change made while it was away would be missed."""
+    state = httpx.get(f"{HUB_URL}/state", timeout=5.0).json()
+
+    return bool(state.get("muted"))
+
+
 def connect(vid=0x2886, pid=0x001A):
     """Keep retrying until the ReSpeaker shows up, so a service restart or a
     reconnected cable recovers on its own."""
@@ -122,13 +143,18 @@ def connect(vid=0x2886, pid=0x001A):
 # ─── Event Loop ───────────────────────────────────────────────────────────────
 
 def run() -> None:
+    """Follow the hub's events forever, reconnecting whenever the hub goes away."""
     dev           = connect()
     ring          = LedRing(dev)
     current_state = "resting"
-    ring.show(STATE_LOOKS[current_state])
+    muted         = False
+    ring.show(look_for(current_state, muted))
 
     while True:
         try:
+            muted = hub_is_muted()
+            ring.show(look_for(current_state, muted))
+
             with httpx.stream("GET", f"{HUB_URL}/events", timeout=None) as response:
                 for line in response.iter_lines():
                     if not line.startswith("data: "):
@@ -136,15 +162,22 @@ def run() -> None:
                     data      = json.loads(line[len("data: "):])
                     event     = data.get("type")
 
+                    if event == "mute":
+                        muted = data.get("text") == "on"
+                        ring.show(look_for(current_state, muted))
+                        continue
+
                     if event == "mic_level":
-                        if current_state in BLINK_STATES:
+                        if current_state in BLINK_STATES and not muted:
                             ring.apply(STATE_LOOKS[current_state])
                         continue
 
+                    # The pipeline state is still followed while muted (the
+                    # ring stays red), so unmuting shows the right look at once.
                     state = EVENT_TO_STATE.get(event)
                     if state:
                         current_state = state
-                        ring.show(STATE_LOOKS[current_state])
+                        ring.show(look_for(current_state, muted))
         except Exception as e:
             print(f"Lost connection to hub ({e}) -- retrying in 3s")
             time.sleep(3)
