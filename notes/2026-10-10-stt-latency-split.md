@@ -24,6 +24,15 @@ by the owner on the live window. The 2 s `minEndTime` hold is unchanged; it
 now starts earlier, so it rarely delays INFERENCE. Revisit if the model
 switch makes decode much shorter than 2 s.
 
+**Checked live 10:24-10:26** (strip photographed every 0.4 s, matched to logs):
+TRANSCRIBING lit at recording_stop and held ~3.5 s until INFERENCE, as
+intended. But after every Echo reply it lit again for ~6 s: the mic records
+the reply, the hub drops it as self-hear (`ignored`), and the strip waited
+for the fallback. Fixed: `ignored` returns the strip to HEARING (ae1653a),
+and a recording that began while a persona was busy never lights
+TRANSCRIBING. Lesson: the window does not pick up page edits until reloaded
+(Ctrl+R); an SSE reconnect is not a reload.
+
 ## Finding 2: measured split (persona_stt_check.py, 5 rounds each)
 
 `persona_stt_check.py` now reports endpoint (end of speech -> recorder's

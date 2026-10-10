@@ -681,6 +681,11 @@
   const TRANSCRIBE_GIVE_UP_MS = 6000;
   let transcribeTimer = null;
 
+  // True when the current recording began while a persona was busy (usually
+  // talking). The mic is then hearing the persona's own voice, and the hub
+  // will throw the transcript away, so TRANSCRIBING should not light for it.
+  let recordingBeganWhileBusy = false;
+
   function setLive(name) {
     console.log(`setLive requested: ${name} (current: ${currentState}, minEndTime: ${minEndTime})`);
     statePromise = statePromise.then(async () => {
@@ -1289,12 +1294,14 @@
 
       console.log(`SSE Event: ${data.type} -> ${JSON.stringify(data)}`);
       addTraceLine(type, text || persona || '', data.error);
-      if (type === 'recording_stop') {
+      if (type === 'recording_start') {
+        recordingBeganWhileBusy = currentState !== 'hearing';
+      } else if (type === 'recording_stop') {
         // Speech has ended and Whisper is starting its final pass, so this is
         // the honest moment for TRANSCRIBING ('heard' only arrives once the
-        // text is done). Skipped while muted, and while a persona is busy:
-        // the mic hears the persona's own voice too.
-        const idle = currentState === 'hearing';
+        // text is done). Skipped while muted, and while a persona is busy or
+        // the recording began while one was: the mic hears the persona too.
+        const idle = currentState === 'hearing' && !recordingBeganWhileBusy;
         const muted = hearingEl.classList.contains('muted');
 
         if (idle && !muted) {
