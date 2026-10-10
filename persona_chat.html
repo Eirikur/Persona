@@ -664,10 +664,26 @@
     speaking:     document.getElementById('state-speaking'),
   };
 
+  // The hub keeps the mute setting; this page only shows it. A click asks the
+  // hub for the opposite of what is showing, and the line through HEARING
+  // changes when the hub answers (and again on the "mute" event it sends).
+  function showMuted(muted) {
+    hearingEl.classList.toggle('muted', !!muted);
+  }
+
+  // Ask the hub for its current mute setting. Used whenever the live-update
+  // connection opens, because a restarted hub comes back unmuted.
+  function syncMuted() {
+    fetch('/state')
+      .then(r => r.json())
+      .then(s => showMuted(s.muted));
+  }
+
   hearingEl.addEventListener('click', () => {
-    const muted = !hearingEl.classList.contains('muted');
-    hearingEl.classList.toggle('muted', muted);
-    fetch(`/mute/${muted ? 'on' : 'off'}`, {method: 'POST'});
+    const wanted = hearingEl.classList.contains('muted') ? 'off' : 'on';
+    fetch('/mute/' + wanted, {method: 'POST'})
+      .then(r => r.json())
+      .then(answer => showMuted(answer.muted));
   });
 
   let currentState = null;
@@ -1188,7 +1204,7 @@
       .then(r => r.json())
       .then(s => {
         drawRoster(s.personas || [], s.loaded_personas || []);
-        hearingEl.classList.toggle('muted', !!s.muted);
+        showMuted(s.muted);
 
         // Fonts the hub remembers (dropped earlier, or saved by "system persist").
         for (const [persona, path] of Object.entries(s.fonts || {})) {
@@ -1268,7 +1284,10 @@
   function connectSSE() {
     const es = new EventSource('/events');
 
-    es.onopen = () => setLive('hearing');
+    es.onopen = () => {
+      setLive('hearing');
+      syncMuted();
+    };
 
     es.onerror = () => setLive(null);
 
@@ -1312,6 +1331,8 @@
             if (currentState === 'transcribing') setLive('hearing');
           }, TRANSCRIBE_GIVE_UP_MS);
         }
+      } else if (type === 'mute') {
+        showMuted(text === 'on');
       } else if (type === 'ignored') {
         // The hub threw the transcript away (most often the persona's own
         // voice, picked up by the mic). Nothing will follow, so go straight
