@@ -79,7 +79,12 @@ HUB_URL = "http://127.0.0.1:8400"
 # large-v1, large-v2, large-v3, large, distil-large-v2, distil-medium.en,
 # distil-small.en, distil-large-v3, large-v3-turbo, turbo
 
-STT_MODEL        = "large-v3-turbo"
+# 2026-10-10: medium.en, was large-v3-turbo. On the owner's own recordings
+# (persona_stt_compare.py, tests/stt_corpus/) it made 1 word error in 123
+# against large-v3-turbo's 3, and decodes in ~1.0 s instead of ~3.3 s on
+# this CPU. See notes/2026-10-10-stt-latency-split.md. To switch back,
+# put "large-v3-turbo" here and restart persona-speech-in.
+STT_MODEL        = "medium.en"
 SILENCE_DURATION = 0.6
 
 # EXPERIMENT (2026-10-07): how readily the voice-activity detector opens a

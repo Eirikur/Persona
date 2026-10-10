@@ -106,4 +106,7 @@ and the saved results rescored:
 
 Recommendation: medium.en. Most accurate here, and ~2.2 s faster per turn.
 small.en saves another ~0.7 s but turned "Sal" into "So", and the wake name
-is what routing depends on. Not switched yet.
+is what routing depends on.
+
+**Switched to medium.en** (speech-in restarted ~11:20). persona_stt_check.py on
+the standard clip: 2.03 s median (endpoint 1.03 + decode 1.01), was 3.64 s.
