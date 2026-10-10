@@ -145,3 +145,13 @@ the standard clip: 2.03 s median (endpoint 1.03 + decode 1.01), was 3.64 s.
    start), ring shows solid red and ignores other states while muted.
 Likely one piece of work: make the hub the single source of mute state,
 announce every change, and have the page and the ring both follow it.
+
+**Done (12:07, owner confirmed the ring live):** 60a3bd6 hub announces every
+mute change ("mute" event); 9b8697c page shows the hub's setting and
+re-checks on every reconnect; 98d69dd ring solid full red (0xFF0000) while
+muted, checks /state on (re)connect. Tests: tests/test_mute.py,
+tests/test_led_ring.py; tests/run_all.sh runs all fast tests (18 cases).
+Correction: the page *did* read `muted` on load (loadRoster); the real gaps
+were no event on change and no re-check on reconnect. The "mute seemed
+ignored" episode (11:46-11:58) was Claude unmuting the hub by curl while the
+page showed muted; the event closes that gap.
