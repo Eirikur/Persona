@@ -50,7 +50,9 @@ import time
 # torch and ctranslate2 load, so this check runs with production's thread
 # count. It also gives us the production model, silence and prompt settings,
 # so this file never keeps its own copy of them.
-from persona_speech_input import STT_MODEL, SILENCE_DURATION, WAKE_WORD_PROMPT, _detect_device
+from persona_speech_input import (
+    STT_MODEL, SILENCE_DURATION, SILERO_SENSITIVITY, WAKE_WORD_PROMPT, _detect_device,
+)
 
 import numpy as np
 import soundfile as sf
@@ -173,10 +175,28 @@ def feed_clip(rec, pcm, marks, stop):
 
 # ─── One Round ────────────────────────────────────────────────────────────────
 
+# When things happened in the current round (time.monotonic seconds).
+# Cleared at the start of each round; the recorder's callback writes into it.
+marks = {}
+
+
+def note_recording_stop():
+    """
+    Recorder callback: the voice-activity detector has decided speech is over.
+    This is the moment the live chat UI could switch from HEARING to
+    TRANSCRIBING, and the moment Whisper starts its final pass.
+    """
+    marks["recording_stop"] = time.monotonic()
+
+
 def run_round(rec, pcm):
-    """Play the clip once. Returns (what was heard, seconds from end of speech to text)."""
-    marks = {}
-    stop  = threading.Event()
+    """
+    Play the clip once. Returns what was heard and two delays in seconds:
+    endpoint (end of speech -> recorder decides speech is over) and
+    decode (that decision -> text returned).
+    """
+    marks.clear()
+    stop = threading.Event()
 
     threading.Thread(target=feed_clip, args=(rec, pcm, marks, stop), daemon=True).start()
 
@@ -184,7 +204,10 @@ def run_round(rec, pcm):
     returned = time.monotonic()
     stop.set()
 
-    return heard, returned - marks["speech_end"]
+    endpoint = marks["recording_stop"] - marks["speech_end"]
+    decode   = returned - marks["recording_stop"]
+
+    return heard, endpoint, decode
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -214,25 +237,35 @@ def main():
         post_speech_silence_duration=SILENCE_DURATION,
         enable_realtime_transcription=True,
         use_microphone=False,
-        silero_sensitivity=0.4,
+        silero_sensitivity=SILERO_SENSITIVITY,
         initial_prompt=WAKE_WORD_PROMPT,
         initial_prompt_realtime=WAKE_WORD_PROMPT,
+        on_recording_stop=note_recording_stop,
     )
     print(f"model load {time.monotonic() - loading_started:.1f}s", flush=True)
 
     error_rates = []
     latencies   = []
+    endpoints   = []
+    decodes     = []
 
     for n in range(1, rounds + 1):
-        heard, latency = run_round(rec, pcm)
+        heard, endpoint, decode = run_round(rec, pcm)
+        latency = endpoint + decode
+
         latencies.append(latency)
+        endpoints.append(endpoint)
+        decodes.append(decode)
+
+        timing = (f"latency {latency:.2f}s "
+                  f"(endpoint {endpoint:.2f}s + decode {decode:.2f}s)")
 
         if reference is None:
-            print(f"round {n}: latency {latency:.2f}s  heard {heard!r}", flush=True)
+            print(f"round {n}: {timing}  heard {heard!r}", flush=True)
         else:
             error_rate = word_error_rate(reference, heard)
             error_rates.append(error_rate)
-            print(f"round {n}: latency {latency:.2f}s  word errors {error_rate:.2f}  "
+            print(f"round {n}: {timing}  word errors {error_rate:.2f}  "
                   f"heard {heard!r}", flush=True)
 
         time.sleep(1.0)
@@ -256,7 +289,9 @@ def main():
         verdict = "FAIL"
 
     print(f"{verdict}: worst word errors {worst:.2f} (limit {MAX_WORD_ERROR_RATE}), "
-          f"median latency {median:.2f}s")
+          f"median latency {median:.2f}s "
+          f"(endpoint {statistics.median(endpoints):.2f}s + "
+          f"decode {statistics.median(decodes):.2f}s)")
 
     # The hub's script runner speaks this line once the script has exited.
     print("SAY: " + spoken_summary(verdict == "PASS", median))
