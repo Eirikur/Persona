@@ -254,13 +254,13 @@ def display_name(persona_name: str) -> str:
     return persona_name.capitalize()
 
 
-def emit_sal(persona_name: str, text: str, provider: str, model: str, voice: str) -> None:
+def emit_persona_turn(persona_name: str, text: str, provider: str, model: str, voice: str) -> None:
     """Push a persona response event to all connected SSE clients."""
     announce_bubble(persona_name, text)
     if not event_loop:
         return
     data = json.dumps({
-        "type":           "sal_turn",
+        "type":           "persona_turn",
         "persona":        persona_name,
         "text":           text,
         "provider":       PROVIDER_LABELS.get(provider, provider),
@@ -439,7 +439,7 @@ def say(persona_name: str, text: str) -> None:
     persona = state.personas[persona_name]
     voice   = state.voices.get(persona.voice, state.voices["default"])
 
-    emit_sal(persona_name, text, persona.provider, effective_model(persona), voice_label(voice))
+    emit_persona_turn(persona_name, text, persona.provider, effective_model(persona), voice_label(voice))
     speaking     = True
     last_speaker = display_name(persona_name)
 
@@ -745,7 +745,7 @@ def tool_call(name: str):
 @app.post("/playback_start")
 def playback_start():
     """Relay persona_speech_output.py's signal that rendered audio has
-    started actually playing, as distinct from sal_turn (text is ready,
+    started actually playing, as distinct from persona_turn (text is ready,
     but Chatterbox hasn't rendered it yet) -- the two can be many seconds
     apart on a long reply."""
     global playing

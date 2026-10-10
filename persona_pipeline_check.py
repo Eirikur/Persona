@@ -44,13 +44,13 @@ SPEAKER     = "Pipeline check"   # chat-bubble label for the test message
 FINISH_WAIT = 5.0                # seconds to wait for the last event after the hub answers
 
 # Hub event names this check cares about. Others (mic levels and so on) are ignored.
-STAGE_EVENTS = ("inference", "sal_turn", "playback_start", "speak_done")
+STAGE_EVENTS = ("inference", "persona_turn", "playback_start", "speak_done")
 
 # Stage name, event that starts it, event that ends it. "sent" is our own moment of sending.
 STAGES = (
     ("hub routing", "sent",           "inference"),
-    ("inference",   "inference",      "sal_turn"),
-    ("render",      "sal_turn",       "playback_start"),
+    ("inference",   "inference",      "persona_turn"),
+    ("render",      "persona_turn",   "playback_start"),
     ("playback",    "playback_start", "speak_done"),
 )
 
@@ -89,7 +89,7 @@ def listen_for_events(hub_url):
 
                 first_seen.setdefault(kind, time.monotonic())
 
-                if kind == "sal_turn":
+                if kind == "persona_turn":
                     replies.append(event["text"])
 
     except httpx.HTTPError as e:

@@ -76,7 +76,7 @@ EVENT_TO_STATE = {
     "heard":           "transcribing",
     "inference":       "inference",
     "tool_call":       "tool_call",
-    "sal_turn":        "rendering",
+    "persona_turn":    "rendering",
     "playback_start":  "speaking",
     "speak_done":      "resting",
 }
