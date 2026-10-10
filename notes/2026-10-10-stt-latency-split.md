@@ -129,3 +129,19 @@ the standard clip: 2.03 s median (endpoint 1.03 + decode 1.01), was 3.64 s.
   mode re-applied by hand afterwards.
 - Known small bug: the chat page doesn't read the hub's mute state on load,
   so after a reload HEARING can look unmuted while the hub is muted.
+
+## Owner's open items (12:30, "so I don't forget")
+
+1. **Mute seemed to be ignored.** Owner saw voice input acted on while
+   HEARING looked muted. Not investigated. Likely suspects: the page and hub
+   disagreeing about mute (the page never reads `muted` from `/state` on
+   load, and its click handler toggles from the page's own class), and hub
+   restarts resetting `MUTED` to False while the page still shows the line.
+2. **LED ring doesn't follow mute.** Checked: `persona_led_ring.py` has no
+   mute handling, and `set_mute()` in the hub emits no event, so the ring
+   can't know.
+3. **Wanted: solid red ring while muted** ("You're on mute!"), until unmuted.
+   Needs: hub emits a mute event (and the page + ring read the state on
+   start), ring shows solid red and ignores other states while muted.
+Likely one piece of work: make the hub the single source of mute state,
+announce every change, and have the page and the ring both follow it.
