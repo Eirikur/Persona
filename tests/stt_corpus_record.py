@@ -29,6 +29,7 @@ Usage:
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -188,6 +189,20 @@ def record_one(number):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+def default_microphone():
+    """
+    The name of PipeWire's default microphone. Recording goes through the
+    "default" device, so this is the only way to see which mic that really is
+    (on 2026-10-10 it was silently the case's built-in array, not the ReSpeaker).
+    """
+    try:
+        result = subprocess.run(["pactl", "get-default-source"],
+                                capture_output=True, text=True, timeout=5)
+        return result.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown (pactl not available)"
+
+
 def show_list():
     """Print every sentence with a mark for the ones already recorded."""
     for number, (text, how) in enumerate(SENTENCES, start=1):
@@ -221,7 +236,7 @@ def main():
         print("Every sentence is recorded. Name numbers to redo some, or --list to see them.")
         return
 
-    print(f"Microphone: {sd.query_devices(kind='input')['name']}")
+    print(f"Microphone: {default_microphone()}")
     print(f"Saving to:  {CORPUS_DIR}")
     print("Leave a breath of silence before and after each sentence.")
 
