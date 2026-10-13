@@ -49,3 +49,14 @@ timing don't matter.
   round of speech.
 - **No pending bubble.** The bubble appears only when the input is
   replayed. Before that, the only sign is the "held" line in Trace.
+
+## Live findings (23:40)
+
+- Echo check worked before the last restart: her own lines were marked
+  "ignored", and the owner's "Challo." was held and then replayed.
+- Bug, fixed in 9a50b43: a recording can start while the persona talks
+  but deliver its text after she's done. Then nothing replayed it
+  ("I'm really into it." waited until a restart lost it). Now, if nobody
+  is speaking when something is held, it's replayed right away.
+- The "let her finish" test ran while the hub was muted, so mute swallowed
+  every transcript before the echo check. Re-run it unmuted.
