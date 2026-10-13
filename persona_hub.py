@@ -176,6 +176,13 @@ state.loaded_personas = ["echo"]
 state.active_persona  = "echo"
 
 speaking       = False   # True from the moment a reply goes out until its audio ends
+
+# Several replies can be on their way to speech output at once (speech
+# output plays them one after another). `speaking` stays True until the
+# last of them ends, so the first one finishing doesn't open the mic to the
+# others.
+replies_in_flight = 0
+replies_lock      = threading.Lock()
 playing        = False   # True only once the audio is actually audible (after rendering)
 last_spoke     = 0.0
 last_speaker   = "Sal"     # display name of the persona who spoke most recently
@@ -445,7 +452,7 @@ def say(persona_name: str, text: str) -> None:
     SELF_HEAR_MARGIN). Every spoken reply goes through here, including the
     summaries scripts ask for.
     """
-    global speaking, playing, last_spoke, last_speaker
+    global speaking, playing, last_spoke, last_speaker, replies_in_flight
 
     if not text.strip():
         print(f"persona {persona_name}: empty reply, nothing to say")
@@ -455,8 +462,11 @@ def say(persona_name: str, text: str) -> None:
     voice   = state.voices.get(persona.voice, state.voices["default"])
 
     emit_persona_turn(persona_name, text, persona.provider, effective_model(persona), voice_label(voice))
-    speaking     = True
     last_speaker = display_name(persona_name)
+
+    with replies_lock:
+        replies_in_flight += 1
+        speaking = True
 
     recent_replies.append(text)
     del recent_replies[:-REPLIES_KEPT]
@@ -468,9 +478,12 @@ def say(persona_name: str, text: str) -> None:
         speak_duration = time.time() - speak_start
         print(f"Speech output triggered in {speak_duration:.2f}s")
     finally:
-        speaking   = False
-        playing    = False
-        last_spoke = time.time()
+        with replies_lock:
+            replies_in_flight -= 1
+            if replies_in_flight == 0:
+                speaking   = False
+                playing    = False
+            last_spoke = time.time()
 
 
 def ignored_reason() -> str:

@@ -248,6 +248,50 @@ def test_reply_to_replayed_input_does_not_loop():
     assert hub.held_inputs == []
 
 
+def test_speaking_lasts_until_the_last_overlapping_reply_ends():
+    """
+    Two replies on their way to speech output at once (speech output plays
+    them one after another): the first one ending must not clear `speaking`
+    while the second is still to be heard.
+    """
+    fresh_start()
+    hub.replies_in_flight = 0
+
+    first_may_end  = threading.Event()
+    second_may_end = threading.Event()
+
+    def pretend_speak(text, voice_prompt):
+        """Stand-in for hub.speak(): 'play' until the test says this reply may end."""
+        if text == "first reply":
+            first_may_end.wait(timeout=2.0)
+        else:
+            second_may_end.wait(timeout=2.0)
+
+    real_speak, real_turn = hub.speak, hub.emit_persona_turn
+    hub.speak             = pretend_speak
+    hub.emit_persona_turn = lambda *args: None
+
+    try:
+        first  = threading.Thread(target=hub.say, args=("echo", "first reply"))
+        second = threading.Thread(target=hub.say, args=("echo", "second reply"))
+        first.start()
+        second.start()
+        time.sleep(0.2)
+
+        first_may_end.set()
+        first.join(timeout=2.0)
+        still_speaking = hub.speaking
+
+        second_may_end.set()
+        second.join(timeout=2.0)
+    finally:
+        hub.speak             = real_speak
+        hub.emit_persona_turn = real_turn
+
+    assert still_speaking
+    assert not hub.speaking
+
+
 def test_typed_input_is_never_ignored():
     """Typed input can't be the persona's voice, so the guard never applies to it."""
     fresh_start()
