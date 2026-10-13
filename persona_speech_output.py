@@ -24,6 +24,7 @@ plays, the next is rendering, so sound starts after the first chunk's render
 instead of the whole reply's.
 """
 
+import threading
 import time
 
 import httpx
@@ -59,6 +60,17 @@ CHUNK_PAUSE          = 0.25
 # Set by /stop so chunks that have not played yet are skipped. Cleared at the
 # start of every reply.
 stop_requested = False
+
+# sounddevice has one shared player, and PortAudio crashes (an assertion in
+# Pa_CloseStream) when two threads start or stop it at once. The web server
+# runs each request in its own thread, so:
+#   - reply_lock lets only one reply play at a time; a second one waits its
+#     turn instead of cutting in (seen 2026-10-12: three replies at once).
+#   - player_lock keeps /stop and a starting chunk from touching the player
+#     at the same moment. /stop doesn't wait for reply_lock, so it still
+#     interrupts at once.
+reply_lock  = threading.Lock()
+player_lock = threading.Lock()
 
 
 # ─── Model Loading ───────────────────────────────────────────────────────────
@@ -162,7 +174,8 @@ def start_playing(wav, sample_rate: int, pause: float = 0.0) -> None:
     if pause > 0:
         audio = np.concatenate([audio, np.zeros(int(pause * sample_rate), dtype=np.float32)])
 
-    sd.play(audio, sample_rate)
+    with player_lock:
+        sd.play(audio, sample_rate)
 
 
 @app.post("/stop")
@@ -172,14 +185,24 @@ def stop():
     global stop_requested
 
     stop_requested = True
-    sd.stop()
+
+    with player_lock:
+        sd.stop()
 
     return {"ok": True}
 
 
 @app.post("/speak")
 def speak(req: SpeakRequest):
-    """Render and play one spoken response, chunk by chunk."""
+    """Render and play one spoken response, chunk by chunk. A reply that
+    arrives while another is playing waits for it to finish (see reply_lock)."""
+
+    with reply_lock:
+        return speak_one_reply(req)
+
+
+def speak_one_reply(req: SpeakRequest):
+    """Render and play one spoken response, chunk by chunk. Called only with reply_lock held."""
 
     global stop_requested
 
