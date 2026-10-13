@@ -51,6 +51,13 @@ SPEECH_INPUT_URL  = "http://127.0.0.1:8403"
 # the speaker, and the voice detector opens a moment after sound begins.
 SELF_HEAR_MARGIN = 1.0   # seconds
 
+# Voice input caught while a persona talks is held and replayed once the
+# persona is done -- unless it is mostly the persona's own words coming back
+# through the mic. ECHO_OVERLAP is the share of a transcript's words that must
+# also be in a recent reply for it to count as that echo and be dropped.
+ECHO_OVERLAP   = 0.6
+REPLIES_KEPT   = 3     # how many recent replies the echo check compares against
+
 SUMMARY_SPEAKER = "system"   # persona whose voice speaks script results (SAY: lines)
 SHUTDOWN_GRACE  = 2.0   # seconds to wait for a reload's SSE reconnect before really shutting down
 
@@ -172,6 +179,13 @@ speaking       = False   # True from the moment a reply goes out until its audio
 playing        = False   # True only once the audio is actually audible (after rendering)
 last_spoke     = 0.0
 last_speaker   = "Sal"     # display name of the persona who spoke most recently
+recent_replies = []        # text of the last few spoken replies, newest last (for the echo check)
+
+# Voice input heard over a persona, oldest first, waiting to be replayed one
+# at a time as each round of speech finishes. The lock keeps two finishing
+# rounds from replaying the same input.
+held_inputs    = []
+held_lock      = threading.Lock()
 
 # Self-hear verdicts. A recording that began while a persona was talking (or
 # just after) has the persona's voice in it, so its transcript is ignored.
@@ -444,6 +458,9 @@ def say(persona_name: str, text: str) -> None:
     speaking     = True
     last_speaker = display_name(persona_name)
 
+    recent_replies.append(text)
+    del recent_replies[:-REPLIES_KEPT]
+
     try:
         # Time speech synthesis
         speak_start = time.time()
@@ -471,12 +488,73 @@ def ignored_reason() -> str:
 def say_summary(text: str) -> None:
     """Speak a script's SAY: line in SUMMARY_SPEAKER's voice, so Sal never reads out reports on herself."""
     say(SUMMARY_SPEAKER, text)
+    speech_finished()
+
+
+def speech_finished() -> None:
+    """Tell the chat page this round of speech is over, then replay the
+    oldest held voice input, if any (see hold_input)."""
     emit("speak_done", "")
+    replay_held_input()
+
+
+# ─── Held Voice Input ─────────────────────────────────────────────────────────
+
+def plain_words(text: str) -> list[str]:
+    """Lowercase words only, punctuation dropped, so two texts can be compared word by word."""
+    not_a_word = r"[^a-z0-9' ]+"
+    return re.sub(not_a_word, " ", text.lower()).split()
+
+
+def sounds_like_echo(text: str) -> bool:
+    """
+    True when most of this transcript's words are in a recent reply: the
+    mic picked up a persona's own voice. ECHO_OVERLAP sets "most".
+
+    A short answer like "yes" counts as echo if the reply also said "yes";
+    a recording of the owner and the persona at once lands in between.
+    """
+    heard = plain_words(text)
+    if not heard:
+        return True
+
+    reply_words = set()
+    for reply in recent_replies:
+        reply_words.update(plain_words(reply))
+
+    matching = [word for word in heard if word in reply_words]
+    return len(matching) / len(heard) >= ECHO_OVERLAP
+
+
+def hold_input(text: str) -> None:
+    """Keep voice input heard over a persona, to replay once speech finishes."""
+    with held_lock:
+        held_inputs.append(text)
+
+    print(f"held (spoke over {last_speaker}): {text!r}")
+    emit("held", "until " + last_speaker + " finishes: " + text)
+
+
+def replay_held_input() -> None:
+    """
+    Send the oldest held voice input through the normal voice path, as if
+    it had just been heard. Only one at a time: its own reply ends in
+    speech_finished(), which replays the next. Runs in its own thread so
+    the round that just finished can return.
+    """
+    with held_lock:
+        if not held_inputs:
+            return
+        text = held_inputs.pop(0)
+
+    print(f"replaying held input: {text!r}")
+    request = ThinkRequest(text=text, replayed=True)
+    threading.Thread(target=converse, args=(request,), daemon=True).start()
 
 
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
-def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
+def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[list[str], bool]:
     """
     Decide which loaded personas should respond to this input, and whether
     it should show up as a chat bubble at all.
@@ -486,6 +564,9 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     by the self-hear guard below, so Sal hearing her own voice doesn't
     raise the chat window or fire a notification either.
 
+    replayed is True for voice input that was held because it was spoken
+    over a persona (see hold_input); it already passed the guard once.
+
     Typed input always reaches full dispatch; in named mode it still must
     start with a loaded persona's wake word (e.g. typing "salice ..."
     addresses just Sal), so that with several personas loaded, typing a
@@ -494,7 +575,8 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     Routing order:
       1. Apply MISHEARINGS corrections
       2. "stop"            → interrupt speech, return ([], True)
-      3. Self-hear guard (voice only) → drop entirely, return ([], False)
+      3. Self-hear guard (voice only) → drop the persona's own echo, or
+         hold the owner's words for later; return ([], False) either way
       4. PERSIST_PHRASE    → save state to disk, return ([], True)
          SCRIPT_PHRASES    → tell the chat window to run a script, return ([], True)
       5. COMMANDS match    → run shell command, return ([], True)
@@ -524,10 +606,14 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
     # this recording began while one was (see recording_start) -- would
     # otherwise be free to trigger COMMANDS, scripts, or a reply to itself.
     # "stop" above is the one voice command that must still get through, so
-    # a persona can be interrupted by hand.
-    if not typed and (speaking or finished_heard_persona):
-        print(f"ignored (self-hear): {normalized!r}")
-        emit("ignored", ignored_reason() + ": " + original)
+    # a persona can be interrupted by hand. Words that aren't the persona's
+    # own are the owner talking over it: hold them until the persona is done.
+    if not typed and not replayed and (speaking or finished_heard_persona):
+        if sounds_like_echo(normalized):
+            print(f"ignored (self-hear): {normalized!r}")
+            emit("ignored", ignored_reason() + ": " + original)
+        else:
+            hold_input(text)
         return [], False
 
     emit("heard", original)
@@ -610,9 +696,10 @@ def dispatch(text: str, typed: bool = False) -> tuple[list[str], bool]:
 # ─── API Routes ───────────────────────────────────────────────────────────────
 
 class ThinkRequest(BaseModel):
-    text: str
-    typed: bool = False    # True = from chat box, skips the self-hear gate
-    speaker: str = "you"   # chat-bubble label for this input; overridden by e.g. the test trigger
+    text:     str
+    typed:    bool = False   # True = from chat box, skips the self-hear gate
+    replayed: bool = False   # True = voice input held while a persona talked, now replayed
+    speaker:  str  = "you"   # chat-bubble label for this input; overridden by e.g. the test trigger
 
 
 @app.get("/state")
@@ -993,7 +1080,7 @@ def converse(req: ThinkRequest):
         return {"text": ""}
 
     start_time = time.time()
-    to_respond, show_bubble = dispatch(req.text, req.typed)
+    to_respond, show_bubble = dispatch(req.text, req.typed, req.replayed)
 
     if not show_bubble:
         return {"text": ""}
@@ -1004,7 +1091,7 @@ def converse(req: ThinkRequest):
     announce_bubble(req.speaker, req.text)
 
     if not to_respond:
-        emit("speak_done", "")
+        speech_finished()
         return {"text": ""}
 
     responses = []
@@ -1026,7 +1113,7 @@ def converse(req: ThinkRequest):
 
     total_duration = time.time() - start_time
     print(f"Total converse cycle: {total_duration:.2f}s")
-    emit("speak_done", "")
+    speech_finished()
     return {"text": "\n".join(r for r in responses if r)}
 
 

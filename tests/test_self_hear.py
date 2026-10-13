@@ -10,6 +10,8 @@
 
 """Self-hear guard tests: does the hub ignore exactly the transcripts whose
 recording began while a persona was talking (or just after), and nothing else?
+And of those, does it hold (not drop) the ones that aren't the persona's own
+words, then replay them one at a time once speech is done?
 
 Fast and service-free: imports persona_hub without starting its server, so no
 window, no sound, and the live hub is never touched. The hub's emit() is
@@ -20,6 +22,7 @@ Usage: tests/test_self_hear.py      (exit code 0 = every test passed)
 """
 
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -50,6 +53,8 @@ def fresh_start():
     hub.last_speaker            = "Echo"
     hub.recording_heard_persona = False
     hub.finished_heard_persona  = False
+    hub.recent_replies          = ["Hello there, the persona words are these."]
+    hub.held_inputs.clear()
 
 
 def persona_stopped(seconds_ago):
@@ -65,6 +70,41 @@ def transcript_was_ignored(text, typed=False):
     hub.dispatch(text, typed)
 
     return any(event_type == "ignored" for event_type, _ in events)
+
+
+def transcript_was_held(text):
+    """Send a voice transcript through dispatch() and report whether it was held for later."""
+    events.clear()
+    hub.dispatch(text)
+
+    return any(event_type == "held" for event_type, _ in events)
+
+
+def replay_and_catch():
+    """
+    Run replay_held_input() with converse() swapped for a stand-in, and
+    return the request it would have replayed (or None if nothing was).
+    """
+    caught = []
+    done   = threading.Event()
+
+    def pretend_converse(request):
+        """Stand-in for hub.converse(): note the request instead of answering it."""
+        caught.append(request)
+        done.set()
+
+    real_converse = hub.converse
+    hub.converse  = pretend_converse
+
+    try:
+        hub.replay_held_input()
+        done.wait(timeout=2.0)
+    finally:
+        hub.converse = real_converse
+
+    if caught:
+        return caught[0]
+    return None
 
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
@@ -127,6 +167,64 @@ def test_persona_talking_when_text_arrives_is_ignored():
     hub.speaking = True
 
     assert transcript_was_ignored("hello there")
+
+
+def test_owner_talking_over_persona_is_held():
+    """Words that aren't the persona's reply are the owner talking over it: held, not dropped."""
+    fresh_start()
+    hub.speaking = True
+
+    assert transcript_was_held("oh I actually meant a font")
+    assert hub.held_inputs == ["oh I actually meant a font"]
+
+
+def test_echo_is_dropped_not_held():
+    """The persona's own words coming back through the mic are dropped, never queued."""
+    fresh_start()
+    hub.speaking = True
+
+    assert transcript_was_ignored("the persona words are these")
+    assert hub.held_inputs == []
+
+
+def test_held_input_is_replayed_oldest_first_one_at_a_time():
+    """Each finished round of speech replays one held input, the oldest."""
+    fresh_start()
+    hub.held_inputs.extend(["first thing", "second thing"])
+
+    request = replay_and_catch()
+
+    assert request.text == "first thing"
+    assert request.replayed
+    assert hub.held_inputs == ["second thing"]
+
+
+def test_nothing_held_nothing_replayed():
+    """With nothing held, finishing a round of speech replays nothing."""
+    fresh_start()
+
+    assert replay_and_catch() is None
+
+
+def test_replayed_input_passes_the_guard():
+    """A replayed input already passed the guard once; a persona talking now mustn't hold it again."""
+    fresh_start()
+    hub.speaking = True
+    events.clear()
+    hub.dispatch("oh I actually meant a font", replayed=True)
+
+    assert hub.held_inputs == []
+    assert ("heard", "oh i actually meant a font") in events
+
+
+def test_reply_to_replayed_input_does_not_loop():
+    """The reply to a replayed input, heard by the mic, is echo: dropped, not held again."""
+    fresh_start()
+    hub.recent_replies.append("A font, of course. Which one would you like?")
+    hub.speaking = True
+
+    assert transcript_was_ignored("a font of course which one would you like")
+    assert hub.held_inputs == []
 
 
 def test_typed_input_is_never_ignored():

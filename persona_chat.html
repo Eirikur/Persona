@@ -1149,7 +1149,8 @@
       return true;
     }
 
-    if (type === 'ignored') recordingStoppedAt = 0;   // that recording's text was dropped instead
+    // That recording's text was dropped, or held to replay later, instead.
+    if (type === 'ignored' || type === 'held') recordingStoppedAt = 0;
 
     return false;
   }
@@ -1388,10 +1389,11 @@
         }
       } else if (type === 'mute') {
         showMuted(text === 'on');
-      } else if (type === 'ignored') {
+      } else if (type === 'ignored' || type === 'held') {
         // The hub threw the transcript away (most often the persona's own
-        // voice, picked up by the mic). Nothing will follow, so go straight
-        // back to HEARING instead of waiting out TRANSCRIBE_GIVE_UP_MS.
+        // voice, picked up by the mic), or held it until the persona is
+        // done. Nothing follows now, so go straight back to HEARING instead
+        // of waiting out TRANSCRIBE_GIVE_UP_MS.
         clearTimeout(transcribeTimer);
         if (currentState === 'transcribing') setLive('hearing');
       } else if (type === 'heard') {
