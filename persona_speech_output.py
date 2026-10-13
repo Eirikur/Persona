@@ -61,13 +61,16 @@ CHUNK_PAUSE          = 0.25
 # start of every reply.
 stop_requested = False
 
-# sounddevice has one shared player, and PortAudio crashes (an assertion in
-# Pa_CloseStream) when two threads start or stop it at once. The web server
-# runs each request in its own thread, so:
+# sounddevice has one shared player. When two threads close its stream at
+# the same moment, PortAudio crashes (an assertion in Pa_CloseStream) or
+# breaks so that playback never finishes. sd.play() and sd.stop() close the
+# stream, and so does sd.wait() when it wakes up -- so sd.wait() is not used
+# here at all (see wait_for_playback). The web server runs each request in
+# its own thread, so:
 #   - reply_lock lets only one reply play at a time; a second one waits its
 #     turn instead of cutting in (seen 2026-10-12: three replies at once).
-#   - player_lock keeps /stop and a starting chunk from touching the player
-#     at the same moment. /stop doesn't wait for reply_lock, so it still
+#   - player_lock is held for every call that touches the player, so no two
+#     of them overlap. /stop doesn't wait for reply_lock, so it still
 #     interrupts at once.
 reply_lock  = threading.Lock()
 player_lock = threading.Lock()
@@ -178,6 +181,30 @@ def start_playing(wav, sample_rate: int, pause: float = 0.0) -> None:
         sd.play(audio, sample_rate)
 
 
+def playback_finished() -> bool:
+    """True when nothing is playing: no sound started yet, or the last one has
+    played to its end or been stopped."""
+
+    with player_lock:
+        try:
+            stream = sd.get_stream()
+        except RuntimeError:
+            return True    # sd.play() has never been called
+
+        if stream.closed:
+            return True
+
+        return not stream.active
+
+
+def wait_for_playback() -> None:
+    """Return once the sound that is playing has finished (or been stopped).
+    Checks every 20 ms instead of using sd.wait() (see player_lock)."""
+
+    while not playback_finished():
+        time.sleep(0.02)
+
+
 @app.post("/stop")
 def stop():
     """Stop the audio that is currently playing, and skip any chunks still to come."""
@@ -217,7 +244,7 @@ def speak_one_reply(req: SpeakRequest):
         wav = render_speech(chunk, req.voice_prompt)
 
         # sd.play replaces whatever is playing, so let the previous chunk finish.
-        sd.wait()
+        wait_for_playback()
 
         if stop_requested:
             break
@@ -232,7 +259,7 @@ def speak_one_reply(req: SpeakRequest):
         is_last = number == len(chunks) - 1
         start_playing(wav, sample_rate_for(req.voice_prompt), 0.0 if is_last else CHUNK_PAUSE)
 
-    sd.wait()
+    wait_for_playback()
 
     words = len(text.split())
     print(f"{words} words in {len(chunks)} chunks, first sound after "
