@@ -60,3 +60,19 @@ timing don't matter.
   is speaking when something is held, it's replayed right away.
 - The "let her finish" test ran while the hub was muted, so mute swallowed
   every transcript before the echo check. Re-run it unmuted.
+
+## Speech-out crash and hang, fixed (00:10, 2026-10-13)
+
+- Cause: sounddevice's shared player was used from several request threads.
+  sd.wait() closes the stream when it wakes; sd.play()/sd.stop() close it
+  too. Two closes at once -> PortAudio assertion crash (23:45, three replies
+  overlapping) or playback that never ends (a /speak hung forever after a
+  /stop while another reply waited).
+- 5bf7215: replies play one at a time (reply_lock); 63ce004: no sd.wait(),
+  every player call under player_lock, waiting is a 20 ms poll.
+- 514ff0e (hub): `speaking` is a count of replies in flight, so the first
+  reply ending doesn't open the mic to the next one's voice.
+- Stress test (scratchpad probe on port 8412): 3 overlapping replies with
+  /stop at 2, 4, 6 s, then a full reply: no hang, no crash.
+- Hub's /speak timeout is 120 s; a reply queued behind long ones could hit
+  it. Watch for "speech output failed: ReadTimeout".
