@@ -73,9 +73,10 @@ NOTIFY_ON_BUBBLE   = True
 LOCAL_PROVIDERS = ("ollama", "echo")
 
 # What the bubble shows for a provider, where the plain name would confuse.
-# The echo provider is not a service, so its bubble just says "local".
+# The echo provider is not a service, so its bubble just says "internal"
+# ("local" could mean anything on this machine or the LAN).
 PROVIDER_LABELS = {
-    "echo": "local",
+    "echo": "internal",
 }
 
 # Voice samples dropped onto a bubble are saved here, one new file per drop,
