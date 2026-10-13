@@ -1,0 +1,1 @@
+Sal, I'm thinking about the latency work and I'd like to know whether a smaller model would be good enough in this particular case here with the traffic noise and other random background things.

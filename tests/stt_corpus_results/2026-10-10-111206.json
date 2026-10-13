@@ -1,0 +1,488 @@
+{
+  "large-v3-turbo": [
+    {
+      "clip": "01-sal-whats-the-weather-for",
+      "reference": "Sal, what's the weather for tonight?",
+      "heard": "Sal, what's the weather going to be like tonight?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 4,
+      "endpoint": -0.5742301659920486,
+      "decode": 2.9804871339874808
+    },
+    {
+      "clip": "02-salice-can-you-hear-me",
+      "reference": "Salice, can you hear me?",
+      "heard": "Salice, can you hear me?",
+      "pieces": 1,
+      "reference_words": 5,
+      "errors": 0,
+      "endpoint": 0.5776387279911432,
+      "decode": 3.4946183650026796
+    },
+    {
+      "clip": "03-hey-sal-what-time-is",
+      "reference": "Hey Sal, what time is it?",
+      "heard": "Hey Sal, what time is it?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 0,
+      "endpoint": 0.6415823029965395,
+      "decode": 3.4460495980019914
+    },
+    {
+      "clip": "04-echo-say-something-back-to",
+      "reference": "Echo, say something back to me.",
+      "heard": "Echo, say something back to me, please.",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 1,
+      "endpoint": 0.5452642379968893,
+      "decode": 2.933648316000472
+    },
+    {
+      "clip": "05-major-what-do-you-think",
+      "reference": "Major, what do you think about that?",
+      "heard": "Major, what did you think about that?",
+      "pieces": 1,
+      "reference_words": 7,
+      "errors": 1,
+      "endpoint": 0.5132728120079264,
+      "decode": 2.934647864996805
+    },
+    {
+      "clip": "06-hal-are-you-there",
+      "reference": "Hal, are you there?",
+      "heard": "Now, hey man, are you there?",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 3,
+      "endpoint": 0.4811312219972024,
+      "decode": 3.377750087005552
+    },
+    {
+      "clip": "07-house-tell-me-a-joke",
+      "reference": "House, tell me a joke.",
+      "heard": "Hey House, tell me a joke in that luxurious British accent of yours.",
+      "pieces": 1,
+      "reference_words": 5,
+      "errors": 8,
+      "endpoint": 0.7381284220027737,
+      "decode": 3.564065174999996
+    },
+    {
+      "clip": "08-system-check-recognition",
+      "reference": "System check recognition.",
+      "heard": "System, check speech recognition.",
+      "pieces": 1,
+      "reference_words": 3,
+      "errors": 1,
+      "endpoint": 0.0013647050072904676,
+      "decode": 3.0318918639968615
+    },
+    {
+      "clip": "09-system-persist-evening-setup",
+      "reference": "System persist evening setup.",
+      "heard": "System. Persist evening setup.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 0,
+      "endpoint": 0.32206730599864386,
+      "decode": 3.144554287006031
+    },
+    {
+      "clip": "10-hi-everyone-im-back",
+      "reference": "Hi everyone, I'm back.",
+      "heard": "Hi everyone, I'm back.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 0,
+      "endpoint": 0.673518026000238,
+      "decode": 3.3767848299903562
+    },
+    {
+      "clip": "11-sal-open-emacs-please",
+      "reference": "Sal, open Emacs please.",
+      "heard": "Sal, please open Emacs for me. Thank you.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 5,
+      "endpoint": 0.8021830690122442,
+      "decode": 3.488528891990427
+    },
+    {
+      "clip": "12-sal-whats-on-the-news",
+      "reference": "Sal, what's on the news today?",
+      "heard": "Sal, what's in the news today?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 1,
+      "endpoint": 0.9936824059986975,
+      "decode": 3.100044008999248
+    },
+    {
+      "clip": "13-sal-remind-me-to-check",
+      "reference": "Sal, remind me to check the window shims.",
+      "heard": "So, remind me... So check those silly window streams again.",
+      "pieces": 2,
+      "reference_words": 8,
+      "errors": 6,
+      "endpoint": -0.22254650900140405,
+      "decode": 3.0043639709911076
+    },
+    {
+      "clip": "14-sal-i-was-thinking-about",
+      "reference": "Sal, I was thinking about the latency work, and I'd like to know whether a smaller model would be good enough.",
+      "heard": "Sal, I'm thinking about the latency work, and I'd like to know whether a smaller model would be good enough in this particular case here with the traffic noise and other random background things.",
+      "pieces": 1,
+      "reference_words": 21,
+      "errors": 16,
+      "endpoint": 0.1958846040070057,
+      "decode": 3.433944303993485
+    },
+    {
+      "clip": "15-room-noise",
+      "reference": "",
+      "heard": "",
+      "pieces": 0,
+      "reference_words": 0,
+      "errors": 0,
+      "endpoint": null,
+      "decode": null
+    },
+    {
+      "clip": "16-room-noise",
+      "reference": "",
+      "heard": "",
+      "pieces": 0,
+      "reference_words": 0,
+      "errors": 0,
+      "endpoint": null,
+      "decode": null
+    }
+  ],
+  "medium.en": [
+    {
+      "clip": "01-sal-whats-the-weather-for",
+      "reference": "Sal, what's the weather for tonight?",
+      "heard": "Sal, what's the weather going to be like tonight?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 4,
+      "endpoint": -0.573366545009776,
+      "decode": 1.0814259809994837
+    },
+    {
+      "clip": "02-salice-can-you-hear-me",
+      "reference": "Salice, can you hear me?",
+      "heard": "Salice, can you hear me?",
+      "pieces": 1,
+      "reference_words": 5,
+      "errors": 0,
+      "endpoint": 0.5455959800019627,
+      "decode": 1.0057973899965873
+    },
+    {
+      "clip": "03-hey-sal-what-time-is",
+      "reference": "Hey Sal, what time is it?",
+      "heard": "Hey Sal, what time is it?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 0,
+      "endpoint": 0.6092238270066446,
+      "decode": 1.0743536209920421
+    },
+    {
+      "clip": "04-echo-say-something-back-to",
+      "reference": "Echo, say something back to me.",
+      "heard": "Echo, say something back to me, please.",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 1,
+      "endpoint": 0.5458236799895531,
+      "decode": 1.1112246530101402
+    },
+    {
+      "clip": "05-major-what-do-you-think",
+      "reference": "Major, what do you think about that?",
+      "heard": "Major, what did you think about that?",
+      "pieces": 1,
+      "reference_words": 7,
+      "errors": 1,
+      "endpoint": 0.5138419810100459,
+      "decode": 1.0965362239949172
+    },
+    {
+      "clip": "06-hal-are-you-there",
+      "reference": "Hal, are you there?",
+      "heard": "Hell, hey man, are you there?",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 3,
+      "endpoint": 0.5138733910134761,
+      "decode": 1.0245033869869076
+    },
+    {
+      "clip": "07-house-tell-me-a-joke",
+      "reference": "House, tell me a joke.",
+      "heard": "Hey House, tell me a joke in that luxurious British accent of yours.",
+      "pieces": 1,
+      "reference_words": 5,
+      "errors": 8,
+      "endpoint": 0.7381743930018274,
+      "decode": 1.144753344997298
+    },
+    {
+      "clip": "08-system-check-recognition",
+      "reference": "System check recognition.",
+      "heard": "System, check speech recognition.",
+      "pieces": 1,
+      "reference_words": 3,
+      "errors": 1,
+      "endpoint": -0.02995829399151262,
+      "decode": 1.009895487994072
+    },
+    {
+      "clip": "09-system-persist-evening-setup",
+      "reference": "System persist evening setup.",
+      "heard": "System, persist evening setup.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 0,
+      "endpoint": 0.28955888299969956,
+      "decode": 0.9574555159924785
+    },
+    {
+      "clip": "10-hi-everyone-im-back",
+      "reference": "Hi everyone, I'm back.",
+      "heard": "Hi everyone, I'm back.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 0,
+      "endpoint": 0.6732553749898216,
+      "decode": 1.013003681000555
+    },
+    {
+      "clip": "11-sal-open-emacs-please",
+      "reference": "Sal, open Emacs please.",
+      "heard": "Sal, please open Emacs for me. Thank you.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 5,
+      "endpoint": 0.8017070329951821,
+      "decode": 1.0833208469994133
+    },
+    {
+      "clip": "12-sal-whats-on-the-news",
+      "reference": "Sal, what's on the news today?",
+      "heard": "Sal, what's in the news today?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 1,
+      "endpoint": 0.9935641909978585,
+      "decode": 0.9736852390051354
+    },
+    {
+      "clip": "13-sal-remind-me-to-check",
+      "reference": "Sal, remind me to check the window shims.",
+      "heard": "Sal, remind me. So check those silly window shims again.",
+      "pieces": 2,
+      "reference_words": 8,
+      "errors": 4,
+      "endpoint": -0.22205373999895528,
+      "decode": 1.0328006979980273
+    },
+    {
+      "clip": "14-sal-i-was-thinking-about",
+      "reference": "Sal, I was thinking about the latency work, and I'd like to know whether a smaller model would be good enough.",
+      "heard": "Sal, I'm thinking about the latency work and I'd like to know whether a smaller model would be good enough in this particular case here with the traffic noise and other random background things.",
+      "pieces": 1,
+      "reference_words": 21,
+      "errors": 16,
+      "endpoint": 0.19560569000896066,
+      "decode": 1.5094719769986114
+    },
+    {
+      "clip": "15-room-noise",
+      "reference": "",
+      "heard": "",
+      "pieces": 0,
+      "reference_words": 0,
+      "errors": 0,
+      "endpoint": null,
+      "decode": null
+    },
+    {
+      "clip": "16-room-noise",
+      "reference": "",
+      "heard": "",
+      "pieces": 0,
+      "reference_words": 0,
+      "errors": 0,
+      "endpoint": null,
+      "decode": null
+    }
+  ],
+  "small.en": [
+    {
+      "clip": "01-sal-whats-the-weather-for",
+      "reference": "Sal, what's the weather for tonight?",
+      "heard": "So, what's the weather going to be like tonight?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 5,
+      "endpoint": null,
+      "decode": null
+    },
+    {
+      "clip": "02-salice-can-you-hear-me",
+      "reference": "Salice, can you hear me?",
+      "heard": "Salice, can you hear me?",
+      "pieces": 1,
+      "reference_words": 5,
+      "errors": 0,
+      "endpoint": 0.5775558840105077,
+      "decode": 0.39121788599004503
+    },
+    {
+      "clip": "03-hey-sal-what-time-is",
+      "reference": "Hey Sal, what time is it?",
+      "heard": "Hey Sal, what time is it?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 0,
+      "endpoint": 0.6094071809930028,
+      "decode": 0.38563188700936735
+    },
+    {
+      "clip": "04-echo-say-something-back-to",
+      "reference": "Echo, say something back to me.",
+      "heard": "Echo, say something back to me, please.",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 1,
+      "endpoint": 0.5133647999900859,
+      "decode": 0.40932428200903814
+    },
+    {
+      "clip": "05-major-what-do-you-think",
+      "reference": "Major, what do you think about that?",
+      "heard": "Major, what did you think about that?",
+      "pieces": 1,
+      "reference_words": 7,
+      "errors": 1,
+      "endpoint": 0.5457110849965829,
+      "decode": 0.4007093380059814
+    },
+    {
+      "clip": "06-hal-are-you-there",
+      "reference": "Hal, are you there?",
+      "heard": "Hal, hey man, are you there?",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 2,
+      "endpoint": 0.5138481019967003,
+      "decode": 0.38499019099981524
+    },
+    {
+      "clip": "07-house-tell-me-a-joke",
+      "reference": "House, tell me a joke.",
+      "heard": "Hey house, tell me a joke in that luxurious British accent of yours.",
+      "pieces": 1,
+      "reference_words": 5,
+      "errors": 8,
+      "endpoint": 0.7380891829961911,
+      "decode": 0.4467182009975659
+    },
+    {
+      "clip": "08-system-check-recognition",
+      "reference": "System check recognition.",
+      "heard": "System, check speech recognition.",
+      "pieces": 1,
+      "reference_words": 3,
+      "errors": 1,
+      "endpoint": 0.0018524769984651357,
+      "decode": 0.35618743298982736
+    },
+    {
+      "clip": "09-system-persist-evening-setup",
+      "reference": "System persist evening setup.",
+      "heard": "System, persist evening setup.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 0,
+      "endpoint": 0.2898051349911839,
+      "decode": 0.3536732549982844
+    },
+    {
+      "clip": "10-hi-everyone-im-back",
+      "reference": "Hi everyone, I'm back.",
+      "heard": "Hi everyone, I'm back.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 0,
+      "endpoint": 0.6735184179997304,
+      "decode": 0.3925574320019223
+    },
+    {
+      "clip": "11-sal-open-emacs-please",
+      "reference": "Sal, open Emacs please.",
+      "heard": "Sal, please open Emacs for me. Thank you.",
+      "pieces": 1,
+      "reference_words": 4,
+      "errors": 5,
+      "endpoint": 0.8014023470022948,
+      "decode": 0.3986595739988843
+    },
+    {
+      "clip": "12-sal-whats-on-the-news",
+      "reference": "Sal, what's on the news today?",
+      "heard": "Sal, what's in the news today?",
+      "pieces": 1,
+      "reference_words": 6,
+      "errors": 1,
+      "endpoint": 0.9933690510079032,
+      "decode": 0.3920733190025203
+    },
+    {
+      "clip": "13-sal-remind-me-to-check",
+      "reference": "Sal, remind me to check the window shims.",
+      "heard": "Sal, remind me. Check those silly window streams again.",
+      "pieces": 2,
+      "reference_words": 8,
+      "errors": 5,
+      "endpoint": -0.254541809001239,
+      "decode": 0.36111422401154414
+    },
+    {
+      "clip": "14-sal-i-was-thinking-about",
+      "reference": "Sal, I was thinking about the latency work, and I'd like to know whether a smaller model would be good enough.",
+      "heard": "Sal, I'm thinking about the latency work and I'd like to know whether a smaller model would be good enough in this particular case here with the traffic noise and other random background things.",
+      "pieces": 1,
+      "reference_words": 21,
+      "errors": 16,
+      "endpoint": 0.22832822099735495,
+      "decode": 0.608112866000738
+    },
+    {
+      "clip": "15-room-noise",
+      "reference": "",
+      "heard": "",
+      "pieces": 0,
+      "reference_words": 0,
+      "errors": 0,
+      "endpoint": null,
+      "decode": null
+    },
+    {
+      "clip": "16-room-noise",
+      "reference": "",
+      "heard": "",
+      "pieces": 0,
+      "reference_words": 0,
+      "errors": 0,
+      "endpoint": null,
+      "decode": null
+    }
+  ]
+}
