@@ -80,11 +80,14 @@ def transcript_was_held(text):
     return any(event_type == "held" for event_type, _ in events)
 
 
-def replay_and_catch():
+def replay_and_catch(action=None):
     """
-    Run replay_held_input() with converse() swapped for a stand-in, and
-    return the request it would have replayed (or None if nothing was).
+    Run action (replay_held_input() if none is given) with converse()
+    swapped for a stand-in, and return the request that would have been
+    replayed (or None if nothing was).
     """
+    if action is None:
+        action = hub.replay_held_input
     caught = []
     done   = threading.Event()
 
@@ -97,7 +100,7 @@ def replay_and_catch():
     hub.converse  = pretend_converse
 
     try:
-        hub.replay_held_input()
+        action()
         done.wait(timeout=2.0)
     finally:
         hub.converse = real_converse
@@ -197,6 +200,24 @@ def test_held_input_is_replayed_oldest_first_one_at_a_time():
     assert request.text == "first thing"
     assert request.replayed
     assert hub.held_inputs == ["second thing"]
+
+
+def test_held_after_persona_finished_is_replayed_at_once():
+    """
+    The "I'm really into it." case: the recording began while the persona
+    talked, but its text arrived after she finished. Nothing else will
+    speak to trigger a replay, so it must be replayed right away.
+    """
+    fresh_start()
+    hub.speaking = True
+    hub.recording_start()
+    hub.recording_stop()
+    persona_stopped(seconds_ago=1.0)
+
+    request = replay_and_catch(lambda: hub.dispatch("I'm really into it."))
+
+    assert request.text == "I'm really into it."
+    assert hub.held_inputs == []
 
 
 def test_nothing_held_nothing_replayed():

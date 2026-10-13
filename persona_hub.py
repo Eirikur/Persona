@@ -534,6 +534,12 @@ def hold_input(text: str) -> None:
     print(f"held (spoke over {last_speaker}): {text!r}")
     emit("held", "until " + last_speaker + " finishes: " + text)
 
+    # A recording that began while the persona talked can end after the
+    # persona is done. Then no round of speech is left to replay it, so
+    # replay it now.
+    if not speaking:
+        replay_held_input()
+
 
 def replay_held_input() -> None:
     """
