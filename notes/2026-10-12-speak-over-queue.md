@@ -76,3 +76,25 @@ timing don't matter.
   /stop at 2, 4, 6 s, then a full reply: no hang, no crash.
 - Hub's /speak timeout is 120 s; a reply queued behind long ones could hit
   it. Watch for "speech output failed: ReadTimeout".
+
+## Owner's notes at end of session (00:20, 2026-10-13)
+
+Owner was tired; re-test these in the morning before trusting them.
+
+1. **Queue seems to work.** Held input appears to get queued and played,
+   but this was not tested carefully. Re-test in the morning.
+2. **"Stop" did not stop a long reply.** Owner is fairly sure. They want
+   "stop" to work as a safety valve, e.g. for a tool that returns many
+   pages of text: an abort at the moment it hurts, instead of a length check
+   that would always be a guess. Not investigated. Suspects:
+   - The transcript may not *start* with "stop". dispatch() checks
+     `normalized.startswith("stop")`, and a recording made while she talks
+     can begin with her words ("...the lamp. Stop.").
+   - /stop only stops speech-out's current reply. Since 5bf7215, replies
+     waiting their turn (reply_lock) still play afterwards, and the hub
+     side keeps going (other personas' replies, held-input replays).
+3. **Named mode is still global.** Other personas hear input if the owner
+   mis-clicks the roster, or forgets to click a persona off.
+4. **Wanted:** when one persona hears its name in named mode, don't switch
+   *everyone* to open mode, only that conversation. (Related to point 3, and
+   to the open question in memory: should mode/state be per-persona?)
