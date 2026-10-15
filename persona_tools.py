@@ -224,7 +224,8 @@ RESEARCH_SCHEMA = {
     "function": {
         "name": "research",
         "description": ("Research a question on the web with Perplexity, which searches, "
-                        "reads and answers with sources. Better than web_search for "
+                        "reads and answers with sources. Use it when the owner says "
+                        "\"look up\" or \"research\". Better than web_search for "
                         "questions that need an explanation rather than a list of links."),
         "parameters": {
             "type": "object",
