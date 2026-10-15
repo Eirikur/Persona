@@ -171,6 +171,16 @@ STOP_WORDS = (
 )
 STOP_MAX_WORDS = 8   # more of the owner's own words than this is a sentence, not a stop
 
+# Phrases that open (or bring forward) the data window, which shows what the
+# personas' tools returned. Matched as whole words anywhere in the input,
+# so "show the data, please" works too.
+DATA_PHRASES = (
+    "show data",
+    "show the data",
+    "show me data",
+    "show me the data",
+)
+
 # Phrases that route input to all loaded personas simultaneously.
 BROADCAST_PHRASES = (
     "hi gang",    "hello gang",    "hey gang",
@@ -332,7 +342,7 @@ def emit_mic_level(level: float) -> None:
 
 def chat_window_focused() -> bool:
     """
-    True if the Persona Chat window already has focus.
+    True if the Persona Chat window (or the data window) already has focus.
 
     Checked via xdotool's active-window title rather than a window id, so
     there's no id-format bookkeeping to get wrong. Any failure here (no
@@ -347,7 +357,9 @@ def chat_window_focused() -> bool:
         ).decode().strip()
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
-    return name == CHAT_WINDOW_TITLE
+    # The data window counts too: raising the chat window over it while the
+    # owner reads it would hide what they asked to see.
+    return name == CHAT_WINDOW_TITLE or name == persona_data_window.DATA_WINDOW_TITLE
 
 
 def raise_chat_window() -> None:
@@ -705,6 +717,7 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
       3. Self-hear guard (voice only) → drop the persona's own echo, or
          hold the owner's words for later; return ([], False) either way
       4. PERSIST_PHRASE    → save state to disk, return ([], True)
+         DATA_PHRASES      → open the data window, return ([], True)
          SCRIPT_PHRASES    → tell the chat window to run a script, return ([], True)
       5. COMMANDS match    → run shell command, return ([], True)
       6. Quiet phrases     → switch to named mode, return ([], True)
@@ -791,6 +804,14 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
         print(reply)
         emit("log", reply)
         return [], True
+
+    for phrase in DATA_PHRASES:
+        if " " + phrase + " " in " " + spoken_words + " ":
+            print("data window: show")
+            emit("log", "showing the data window")
+            threading.Thread(target=persona_data_window.show_window,
+                             args=(CHAT_WINDOW_TITLE,), daemon=True).start()
+            return [], True
 
     for phrase, script in SCRIPT_PHRASES.items():
         if spoken_words.startswith(phrase):
