@@ -30,9 +30,7 @@ Branch `data-window` (off `speak-over-queue`; neither merged to main).
 
 ## Not done
 
-- Sal does not have `research` in her tools yet: her list lives in
-  `state.json` and nothing in the UI or hub can change it. Tested only by
-  calling the LLM service directly with the tool in the request.
+- Sal got `research` 2026-10-15 by a one-time script edit of `state.json` (hub stopped). A spoken/settings way to change tools is wanted later.
 - The data window could read history from the tool log, so it survives
   restarts.
 - Deep research as a background job (persona says "I'll look into it",
