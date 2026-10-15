@@ -6,7 +6,8 @@ the persona read, and the full structure if the tool has one), and the reply
 the persona gave in the chat afterwards.
 
 Written by persona_llm.py once a reply is finished, since only then is the
-reply known. Kept in an SQLite file, which any SQLite tool can open:
+reply known. Kept in an SQLite file, which any SQLite tool can open
+(the sqlite3 command is in the Ubuntu package of the same name):
 
     sqlite3 ~/.local/share/persona/tool_log.db
     sqlite> SELECT time, tool, arguments FROM tool_calls ORDER BY id DESC LIMIT 10;
