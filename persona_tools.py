@@ -6,15 +6,23 @@ persona_llm.py looks them up by name and knows nothing else about them.
 
 To add a tool: write a function that takes the call's arguments (a dict)
 and returns a string result, write its schema, and add both to TOOLS.
+
+A tool whose source gives structured data (research, below) may instead
+return a dict: {"text": what the persona reads, "data": the full structure}.
+The persona only ever sees "text"; "data" goes to the data window.
 """
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import httpx
 
-from persona_schemas import NEWS_SOURCES, NEWS_MAX_ITEMS
+from persona_schemas import (
+    NEWS_SOURCES, NEWS_MAX_ITEMS,
+    RESEARCH_PRESETS, RESEARCH_ALLOWED_DEPTHS, RESEARCH_TIMEOUT,
+)
 
 
 # ─── Web Search (Brave) ────────────────────────────────────────────────────────
@@ -140,9 +148,103 @@ NEWS_READ_SCHEMA = {
 }
 
 
+# ─── Research (Perplexity Agent API) ──────────────────────────────────────────
+
+def research_sources(response: dict) -> list[dict]:
+    """Every source Perplexity's searches found, from all its search_results items, in id order."""
+    sources = []
+    for item in response.get("output", []):
+        if item.get("type") == "search_results":
+            sources.extend(item.get("results", []))
+
+    sources.sort(key=lambda source: source.get("id", 0))
+    return sources
+
+
+def research_answer(response: dict) -> str:
+    """Perplexity's written answer: the text parts of its message items, joined."""
+    parts = []
+    for item in response.get("output", []):
+        if item.get("type") == "message":
+            for content in item.get("content", []):
+                if content.get("type") == "output_text":
+                    parts.append(content.get("text", ""))
+
+    return "\n\n".join(parts)
+
+
+def research(args: dict) -> dict | str:
+    """
+    Ask Perplexity to research a question and return its answer with a
+    numbered source list. Depth picks the preset (see RESEARCH_PRESETS);
+    a depth not in RESEARCH_ALLOWED_DEPTHS is lowered to "normal".
+    """
+    api_key = os.environ.get("PPLX_API_KEY")
+    if not api_key:
+        return "Research is not configured -- no PPLX_API_KEY set in .env."
+
+    query = args.get("query", "")
+    depth = args.get("depth", "quick")
+    if depth not in RESEARCH_ALLOWED_DEPTHS:
+        depth = "normal"
+
+    try:
+        reply = httpx.post(
+            "https://api.perplexity.ai/v1/agent",
+            headers = {"Authorization": "Bearer " + api_key},
+            json    = {"preset": RESEARCH_PRESETS[depth], "input": query},
+            timeout = RESEARCH_TIMEOUT,
+        )
+    except httpx.TimeoutException:
+        return "Research timed out after " + str(RESEARCH_TIMEOUT) + " seconds."
+
+    if reply.status_code != 200:
+        return "Research failed: " + str(reply.status_code) + " " + reply.text[:200]
+
+    response = reply.json()
+    answer   = research_answer(response)
+    sources  = research_sources(response)
+
+    # Perplexity marks claims with source ids, "[web:3]" or "[3]". The
+    # persona would read those out loud, so they come out of the answer;
+    # the numbered list below keeps which sources were used.
+    marker = r"\[(web:)?\d+\]"
+    answer = re.sub(marker, "", answer)
+
+    lines = [answer, "", "Sources:"]
+    for source in sources:
+        lines.append(str(source.get("id")) + ". " + (source.get("title") or "")
+                     + " (" + (source.get("date") or "no date") + ") " + (source.get("url") or ""))
+
+    return {"text": "\n".join(lines), "data": response}
+
+
+RESEARCH_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "research",
+        "description": ("Research a question on the web with Perplexity, which searches, "
+                        "reads and answers with sources. Better than web_search for "
+                        "questions that need an explanation rather than a list of links."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The question, as a full sentence."},
+                "depth": {"type": "string",
+                          "description": ("quick: one search, for single facts. "
+                                          "normal: several searches, for explanations "
+                                          "and current events. Default quick.")},
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
 # ─── Registry ──────────────────────────────────────────────────────────────────
 
 TOOLS = {
     "web_search": {"schema": WEB_SEARCH_SCHEMA, "run": web_search},
     "news_read":  {"schema": NEWS_READ_SCHEMA, "run": news_read},
+    "research":   {"schema": RESEARCH_SCHEMA,  "run": research},
 }

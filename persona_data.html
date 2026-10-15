@@ -88,6 +88,11 @@
     font-size: 13px;
   }
 
+  details.full-data {
+    margin: 10px 0 0 0;
+    background: var(--bg);
+  }
+
   pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -171,6 +176,23 @@
     addBlock(body, 'asked the tool', argumentLines(record.arguments));
     addBlock(body, 'tool returned', record.result);
 
+    // Tools with a structured source (research) also send the whole of it.
+    // Closed by default: it is long, and the text above is the summary.
+    if (record.data) {
+      const full = document.createElement('details');
+      full.className = 'full-data';
+
+      const fullSummary = document.createElement('summary');
+      fullSummary.textContent = 'full data';
+
+      const fullText = document.createElement('pre');
+      fullText.textContent = record.data;
+
+      full.appendChild(fullSummary);
+      full.appendChild(fullText);
+      body.appendChild(full);
+    }
+
     details.appendChild(summary);
     details.appendChild(body);
     return details;
@@ -181,7 +203,7 @@
   function addNewest(record) {
     emptyEl.style.display = 'none';
 
-    const previous = recordsEl.querySelector('details');
+    const previous = recordsEl.querySelector(':scope > details');
     if (previous) previous.open = false;
 
     const element = recordElement(record);
@@ -198,7 +220,7 @@
     const response = await fetch('/data/recent');
     const records  = await response.json();
 
-    for (const old of recordsEl.querySelectorAll('details')) {
+    for (const old of recordsEl.querySelectorAll(':scope > details')) {
       old.remove();
     }
     emptyEl.style.display = records.length ? 'none' : '';

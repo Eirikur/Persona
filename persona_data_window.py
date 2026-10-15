@@ -38,7 +38,7 @@ records_lock = threading.Lock()
 next_id      = 1
 
 
-def add_record(persona: str, question: str, tool: str, arguments: str, result: str) -> dict:
+def add_record(persona: str, question: str, tool: str, arguments: str, result: str, data: str) -> dict:
     """Keep one tool result, give it an id and a time, and return it."""
     global next_id
 
@@ -51,6 +51,7 @@ def add_record(persona: str, question: str, tool: str, arguments: str, result: s
             "tool":      tool,
             "arguments": arguments,
             "result":    result,
+            "data":      data,
         }
         next_id += 1
 

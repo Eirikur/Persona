@@ -66,6 +66,24 @@ NEWS_SOURCES = {
 NEWS_MAX_ITEMS = 8
 
 
+# ─── Research (Perplexity) ────────────────────────────────────────────────────
+
+# How deep persona_tools.research may go, and the Perplexity Agent API preset
+# each depth uses. Deeper is slower and costs more: on 2026-10-15 "quick" took
+# 2 s and "normal" 5.5 s, each well under a cent.
+RESEARCH_PRESETS = {
+    "quick":  "fast",     # one search, single facts
+    "normal": "low",      # a few searches, may read a page
+    "deep":   "medium",   # many steps, many sources; can take minutes
+}
+
+# Depths a persona may actually use. "deep" stays out until it can run in
+# the background instead of holding up a spoken reply.
+RESEARCH_ALLOWED_DEPTHS = ("quick", "normal")
+
+RESEARCH_TIMEOUT = 50   # seconds; the hub gives up on a whole reply after 60
+
+
 # ─── Log Sources ──────────────────────────────────────────────────────────────
 
 # The service logs the Logs tab follows: source name shown in the tab, mapped

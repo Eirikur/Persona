@@ -869,6 +869,7 @@ class ToolResult(BaseModel):
     tool:      str
     arguments: str   # exactly as the model sent them (JSON text)
     result:    str   # exactly as the model got it back
+    data:      str = ""   # the tool's full structure as JSON text, if it has one
 
 
 @app.get("/state")
@@ -1012,7 +1013,7 @@ def tool_result(report: ToolResult):
     """Keep a copy of what a tool returned, for the data window. Only a
     one-line notice goes over the event stream; the window fetches the rest."""
     record = persona_data_window.add_record(
-        report.persona, report.question, report.tool, report.arguments, report.result,
+        report.persona, report.question, report.tool, report.arguments, report.result, report.data,
     )
 
     emit("tool_result", persona_data_window.notice_text(record), id=record["id"], error=False)

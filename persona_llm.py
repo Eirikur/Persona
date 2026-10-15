@@ -85,19 +85,29 @@ def run_tool_call(call, persona: str, question: str) -> dict:
 
     tool = TOOLS.get(call.function.name)
     if tool:
-        result = tool["run"](json.loads(call.function.arguments))
+        output = tool["run"](json.loads(call.function.arguments))
     else:
-        result = f"Unknown tool: {call.function.name}"
+        output = f"Unknown tool: {call.function.name}"
 
-    report_tool_result(persona, question, call.function.name, call.function.arguments, result)
+    # A tool returns plain text, or {"text": ..., "data": ...} when it also
+    # has a full structure behind the text (see persona_tools.py).
+    if isinstance(output, dict):
+        result = output["text"]
+        data   = json.dumps(output["data"], indent=2, ensure_ascii=False)
+    else:
+        result = output
+        data   = ""
+
+    report_tool_result(persona, question, call.function.name, call.function.arguments, result, data)
 
     return {"role": "tool", "tool_call_id": call.id, "content": result}
 
 
-def report_tool_result(persona: str, question: str, tool: str, arguments: str, result: str) -> None:
+def report_tool_result(persona: str, question: str, tool: str, arguments: str, result: str, data: str) -> None:
     """
     Send the hub what a tool was asked and what it returned, exactly as the
     model sent and received them, so the owner can see it in the data window.
+    data is the tool's full structure as JSON text, or "" if it has none.
     """
     record = {
         "persona":   persona,
@@ -105,6 +115,7 @@ def report_tool_result(persona: str, question: str, tool: str, arguments: str, r
         "tool":      tool,
         "arguments": arguments,
         "result":    result,
+        "data":      data,
     }
 
     try:
