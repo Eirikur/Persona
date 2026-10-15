@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 
 from persona_schemas import DEFAULT_MODELS
 from persona_tools import TOOLS
+from persona_tool_log import save_calls
 
 load_dotenv()
 
@@ -75,9 +76,10 @@ class ChatRequest(BaseModel):
     persona: str = ""       # who is asking; only used to label tool results for the data window
 
 
-def run_tool_call(call, persona: str, question: str) -> dict:
+def run_tool_call(call, persona: str, question: str, calls_made: list) -> dict:
     """Run one model-requested tool call and return its result as a tool
-    message. The hub gets a copy of the result for the data window."""
+    message. The hub gets a copy of the result for the data window, and
+    calls_made gets one for the tool log once the reply is finished."""
     try:
         httpx.post(f"{HUB_URL}/tool_call/{call.function.name}", timeout=1.0)
     except Exception:
@@ -98,26 +100,26 @@ def run_tool_call(call, persona: str, question: str) -> dict:
         result = output
         data   = ""
 
-    report_tool_result(persona, question, call.function.name, call.function.arguments, result, data)
+    record = {
+        "persona":   persona,
+        "question":  question,
+        "tool":      call.function.name,
+        "arguments": call.function.arguments,
+        "result":    result,
+        "data":      data,
+    }
+    report_tool_result(record)
+    calls_made.append(record)
 
     return {"role": "tool", "tool_call_id": call.id, "content": result}
 
 
-def report_tool_result(persona: str, question: str, tool: str, arguments: str, result: str, data: str) -> None:
+def report_tool_result(record: dict) -> None:
     """
     Send the hub what a tool was asked and what it returned, exactly as the
     model sent and received them, so the owner can see it in the data window.
-    data is the tool's full structure as JSON text, or "" if it has none.
+    The record's data is the tool's full structure as JSON text, or "".
     """
-    record = {
-        "persona":   persona,
-        "question":  question,
-        "tool":      tool,
-        "arguments": arguments,
-        "result":    result,
-        "data":      data,
-    }
-
     try:
         httpx.post(f"{HUB_URL}/tool_result", json=record, timeout=1.0)
     except Exception:
@@ -145,6 +147,8 @@ async def chat(req: ChatRequest):
 
     tool_schemas = [TOOLS[name]["schema"] for name in req.tools if name in TOOLS]
 
+    calls_made = []   # every tool call for this reply, saved to the tool log at the end
+
     for _ in range(MAX_TOOL_ROUNDS):
         kwargs = {"model": model, "messages": messages}
         if tool_schemas:
@@ -153,6 +157,7 @@ async def chat(req: ChatRequest):
 
         message = response.choices[0].message
         if not message.tool_calls:
+            save_calls(calls_made, message.content or "")
             return response.model_dump()
 
         # Only the standard tool-calling fields -- some providers (Cerebras)
@@ -173,8 +178,11 @@ async def chat(req: ChatRequest):
         question = req.messages[-1]["content"] if req.messages else ""
 
         for call in message.tool_calls:
-            messages.append(run_tool_call(call, req.persona, question))
+            messages.append(run_tool_call(call, req.persona, question, calls_made))
 
+    # Out of tool rounds: the last answer is whatever the model said alongside
+    # its final tool request, often nothing.
+    save_calls(calls_made, response.choices[0].message.content or "")
     return response.model_dump()
 
 
