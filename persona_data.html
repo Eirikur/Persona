@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Persona Data</title>
+<style>
+  /* ─── Fonts and Colors (same as persona_chat.html) ──────────────────────── */
+
+  @font-face {
+    font-family: 'Lucida Casual';
+    src: url('fonts/lucida-casual.ttf') format('truetype');
+    font-weight: 400; font-style: normal;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #1E2B35;
+    --surface:     #2A3C48;
+    --border:      #304454;
+    --text:        #C4CDD5;
+    --text-result: #D0D8DF;
+    --text-muted:  #607080;
+    --text-info:   #8FA0AE;
+    --accent:      #b8956a;
+    --font-ui:     'Lucida Casual', 'Lucida Sans', sans-serif;
+    --font-data:   'DejaVu Sans Mono', monospace;
+    --radius:      10px;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+
+  /* ─── Layout ───────────────────────────────────────────────────────────── */
+
+  header {
+    position: sticky;
+    top: 0;
+    padding: 12px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  #records {
+    padding: 16px 20px;
+  }
+
+  #empty {
+    color: var(--text-muted);
+  }
+
+
+  /* ─── One Tool Result ──────────────────────────────────────────────────── */
+
+  details {
+    margin-bottom: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  summary {
+    padding: 8px 14px;
+    cursor: pointer;
+    color: var(--text-info);
+  }
+
+  summary .tool {
+    color: var(--accent);
+  }
+
+  .body {
+    padding: 0 14px 14px 14px;
+  }
+
+  .label {
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--font-data);
+    font-size: 14px;
+    color: var(--text-result);
+  }
+</style>
+</head>
+<body>
+
+<header>PERSONA DATA</header>
+
+<div id="records">
+  <p id="empty">No tool results yet. They appear here when a persona uses a tool.</p>
+</div>
+
+<script>
+  // Shows what the personas' tools returned, newest on top. The hub keeps
+  // the last 50 (see persona_data_window.py); a short "tool_result" notice
+  // arrives over the event stream and the full record is fetched from the hub.
+  //
+  // Tool results are outside text (web pages, news feeds), so they are only
+  // ever set with textContent, never as HTML.
+
+  const recordsEl = document.getElementById('records');
+  const emptyEl   = document.getElementById('empty');
+
+
+  // ─── Showing Records ────────────────────────────────────────────────────
+
+  // The arguments as the model sent them, one "name: value" per line.
+  // Falls back to the raw text if they aren't valid JSON.
+  function argumentLines(argumentsText) {
+    try {
+      const args  = JSON.parse(argumentsText);
+      const lines = [];
+      for (const name of Object.keys(args)) {
+        lines.push(name + ': ' + JSON.stringify(args[name]));
+      }
+      return lines.join('\n');
+    } catch (err) {
+      return argumentsText;
+    }
+  }
+
+
+  // A labelled block of plain text inside a record.
+  function addBlock(parent, label, text) {
+    const labelEl = document.createElement('div');
+    labelEl.className   = 'label';
+    labelEl.textContent = label;
+
+    const textEl = document.createElement('pre');
+    textEl.textContent = text;
+
+    parent.appendChild(labelEl);
+    parent.appendChild(textEl);
+  }
+
+
+  // Build the element for one tool result. Only the newest is open.
+  function recordElement(record) {
+    const details = document.createElement('details');
+    details.dataset.id = record.id;
+
+    const summary = document.createElement('summary');
+
+    const toolEl = document.createElement('span');
+    toolEl.className   = 'tool';
+    toolEl.textContent = record.tool;
+
+    summary.appendChild(document.createTextNode(record.time + '  ' + record.persona + '  '));
+    summary.appendChild(toolEl);
+    summary.appendChild(document.createTextNode('  (' + record.result.length + ' characters)'));
+
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    addBlock(body, 'answering', record.question);
+    addBlock(body, 'asked the tool', argumentLines(record.arguments));
+    addBlock(body, 'tool returned', record.result);
+
+    details.appendChild(summary);
+    details.appendChild(body);
+    return details;
+  }
+
+
+  // Put a new record on top, open it, and close the one that was on top.
+  function addNewest(record) {
+    emptyEl.style.display = 'none';
+
+    const previous = recordsEl.querySelector('details');
+    if (previous) previous.open = false;
+
+    const element = recordElement(record);
+    element.open = true;
+    recordsEl.insertBefore(element, recordsEl.firstChild);
+  }
+
+
+  // ─── Talking to the Hub ─────────────────────────────────────────────────
+
+  // Replace everything shown with the hub's current list. Run on every
+  // (re)connect, so nothing is missed or shown twice across a hub restart.
+  async function loadAll() {
+    const response = await fetch('/data/recent');
+    const records  = await response.json();
+
+    for (const old of recordsEl.querySelectorAll('details')) {
+      old.remove();
+    }
+    emptyEl.style.display = records.length ? 'none' : '';
+
+    // The hub sends newest first; add oldest first so the newest ends on top.
+    for (const record of records.reverse()) {
+      addNewest(record);
+    }
+  }
+
+
+  // Fetch one record the hub just announced and put it on top.
+  async function loadOne(id) {
+    if (recordsEl.querySelector('details[data-id="' + id + '"]')) return;
+
+    const response = await fetch('/data/' + id);
+    if (!response.ok) return;
+
+    addNewest(await response.json());
+  }
+
+
+  // Listen for "tool_result" notices; everything else on the stream is for
+  // the chat window. Unlike the chat window, closing this one never shuts
+  // Persona down.
+  const events = new EventSource('/events');
+
+  events.onopen = () => {
+    loadAll();
+  };
+
+  events.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'tool_result') {
+      loadOne(data.id);
+    }
+  };
+</script>
+
+</body>
+</html>
