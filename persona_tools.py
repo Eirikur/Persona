@@ -130,15 +130,19 @@ NEWS_READ_SCHEMA = {
     "type": "function",
     "function": {
         "name": "news_read",
-        "description": ("Get current news headlines from a news service. Use for "
-                        "what is happening now. Optionally filter by a keyword "
-                        "such as a country or city."),
+        "description": ("Get current news headlines (one line each, no detail) from a "
+                        "news service. Use for \"what's in the news\". For explaining "
+                        "a story, use research instead. Optionally filter by a "
+                        "keyword such as a country or city."),
         "parameters": {
             "type": "object",
             "properties": {
-                "source":  {"type": "string", "description": "News service. Default bbc."},
+                "source":  {"type": "string",
+                            "enum": list(NEWS_SOURCES),
+                            "description": "News service, not a section. Default bbc."},
                 "section": {"type": "string",
-                            "description": "One of: " + ", ".join(NEWS_SOURCES["bbc"]["sections"]) + ". Default world."},
+                            "enum": list(NEWS_SOURCES["bbc"]["sections"]),
+                            "description": "Part of the news to read. Default world."},
                 "keyword": {"type": "string", "description": "Only headlines mentioning this word, e.g. Ukraine."},
                 "count":   {"type": "integer", "description": "How many headlines, at most " + str(NEWS_MAX_ITEMS) + ". Default 5."},
             },
@@ -224,9 +228,9 @@ RESEARCH_SCHEMA = {
     "function": {
         "name": "research",
         "description": ("Research a question on the web with Perplexity, which searches, "
-                        "reads and answers with sources. Use it when the owner says "
-                        "\"look up\" or \"research\". Better than web_search for "
-                        "questions that need an explanation rather than a list of links."),
+                        "reads and answers with sources. Use it first, and on its own, "
+                        "when the owner says \"look up\" or \"research\", or asks a "
+                        "question that needs current facts or an explanation."),
         "parameters": {
             "type": "object",
             "properties": {
