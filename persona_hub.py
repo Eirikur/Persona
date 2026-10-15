@@ -159,6 +159,17 @@ MISHEARINGS: dict[str, str] = {
 
 }
 
+# Words that stop a persona mid-speech. While a persona talks, they count
+# anywhere in a short recording ("Echo, stop", "uh... hush"): the mic often
+# catches a few other words before the owner's. "be quiet" also switches the
+# room to named mode. See is_stop_request().
+STOP_WORDS = (
+    "stop",
+    "hush",
+    "be quiet",
+)
+STOP_MAX_WORDS = 8   # more of the owner's own words than this is a sentence, not a stop
+
 # Phrases that route input to all loaded personas simultaneously.
 BROADCAST_PHRASES = (
     "hi gang",    "hello gang",    "hey gang",
@@ -201,6 +212,13 @@ held_lock      = threading.Lock()
 # may already have started.
 recording_heard_persona = False   # the recording in progress
 finished_heard_persona  = False   # the last recording that ended (its text comes next)
+
+# A stop means "be silent now": voice input recorded before it, mostly the
+# persona's own voice, is dropped rather than held and replayed afterwards.
+# Start times are handed on from recording to transcript like the verdicts above.
+recording_began = 0.0   # when the recording in progress started
+finished_began  = 0.0   # when the last recording that ended started
+last_stop       = 0.0   # when a stop word last silenced a persona
 
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
 MUTED          = False     # True = ignore voice input; typed input still goes through
@@ -571,6 +589,93 @@ def replay_held_input() -> None:
     threading.Thread(target=converse, args=(request,), daemon=True).start()
 
 
+# ─── Stop Words ───────────────────────────────────────────────────────────────
+
+def is_stop_request(text: str, check_echo: bool) -> bool:
+    """
+    True when this input asks a talking persona to stop: a short recording
+    with one of STOP_WORDS anywhere in it ("stop", "Echo, stop", "hush").
+
+    With check_echo, a recording that is mostly the persona's own words is
+    not a stop: "don't stop now" in her reply, coming back through the mic,
+    must not cut her off. But only if her reply has a stop word in it: if
+    not, the stop word came from the owner, however much of her the mic
+    caught too ("...across the table. Stop."). A stop word said on its own
+    always counts.
+    """
+    words = plain_words(text)
+
+    # Count only the owner's words: the mic often catches a sentence of the
+    # persona's before the stop, and that shouldn't make it "too long".
+    reply_words = set()
+    for reply in recent_replies:
+        reply_words.update(plain_words(reply))
+
+    owner_words = [word for word in words if word not in reply_words]
+    if len(owner_words) > STOP_MAX_WORDS:
+        return False
+
+    spoken = " ".join(words)
+
+    remaining = spoken
+    for stop_word in STOP_WORDS:
+        pattern   = r"\b" + re.escape(stop_word) + r"\b"
+        remaining = re.sub(pattern, " ", remaining)
+
+    if remaining == spoken:
+        return False    # no stop word in it
+
+    if not remaining.split():
+        return True     # nothing but stop words
+
+    if check_echo and replies_have_stop_word() and sounds_like_echo(spoken):
+        return False
+
+    return True
+
+
+def replies_have_stop_word() -> bool:
+    """True when a recent persona reply has one of STOP_WORDS in it."""
+    for reply in recent_replies:
+        reply_words = " ".join(plain_words(reply))
+
+        for stop_word in STOP_WORDS:
+            pattern = r"\b" + re.escape(stop_word) + r"\b"
+            if re.search(pattern, reply_words):
+                return True
+
+    return False
+
+
+def stop_speaking(normalized: str) -> None:
+    """
+    Silence the persona that is talking, and forget voice input held while
+    it talked: after a stop, nothing queued should start it up again.
+    "be quiet" also switches the room to named mode.
+    """
+    global MODE, last_stop
+
+    print(f"stop: {normalized!r}")
+    emit("heard", normalized)
+
+    # Clear the held input before stopping the audio: the stopped reply
+    # finishes at once, and its speech_finished() would replay the next one.
+    last_stop = time.time()
+
+    with held_lock:
+        dropped = len(held_inputs)
+        held_inputs.clear()
+
+    if dropped:
+        print(f"stop: dropped {dropped} held input(s)")
+
+    httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
+
+    if "be quiet" in " ".join(plain_words(normalized)):
+        MODE = "named"
+        print("mode → named")
+
+
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
 def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[list[str], bool]:
@@ -593,7 +698,8 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
 
     Routing order:
       1. Apply MISHEARINGS corrections
-      2. "stop"            → interrupt speech, return ([], True)
+      2. STOP_WORDS        → interrupt speech, return ([], True)
+                             ("be quiet" also switches to named mode)
       3. Self-hear guard (voice only) → drop the persona's own echo, or
          hold the owner's words for later; return ([], False) either way
       4. PERSIST_PHRASE    → save state to disk, return ([], True)
@@ -616,19 +722,32 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
         pattern = r"\b" + re.escape(heard) + r"\b"
         normalized = re.sub(pattern, intended, normalized)
 
-    if normalized.startswith("stop"):
-        emit("heard", original)
-        httpx.post(f"{SPEECH_OUTPUT_URL}/stop", timeout=5.0)
+    # A persona is talking now, or this voice recording began while one was
+    # (see recording_start).
+    persona_talking = speaking or (not typed and finished_heard_persona)
+    heard_persona   = persona_talking and not typed and not replayed
+
+    # While a persona talks, a stop word anywhere in a short input stops it.
+    # Otherwise only input that starts with "stop" does, so a question like
+    # "how do I stop a process" still reaches the personas.
+    if persona_talking and is_stop_request(normalized, check_echo=heard_persona):
+        stop_speaking(normalized)
         return [], True
 
-    # A persona's own voice reaching the mic -- a persona is talking now, or
-    # this recording began while one was (see recording_start) -- would
-    # otherwise be free to trigger COMMANDS, scripts, or a reply to itself.
-    # "stop" above is the one voice command that must still get through, so
-    # a persona can be interrupted by hand. Words that aren't the persona's
-    # own are the owner talking over it: hold them until the persona is done.
-    if not typed and not replayed and (speaking or finished_heard_persona):
-        if sounds_like_echo(normalized):
+    if normalized.startswith("stop"):
+        stop_speaking(normalized)
+        return [], True
+
+    # A persona's own voice reaching the mic would otherwise be free to
+    # trigger COMMANDS, scripts, or a reply to itself. Stop words above are
+    # the one voice command that must still get through, so a persona can be
+    # interrupted by hand. Words that aren't the persona's own are the owner
+    # talking over it: hold them until the persona is done.
+    if heard_persona:
+        if finished_began < last_stop:
+            print(f"ignored (recorded before stop): {normalized!r}")
+            emit("ignored", "recorded before the stop: " + original)
+        elif sounds_like_echo(normalized):
             print(f"ignored (self-hear): {normalized!r}")
             emit("ignored", ignored_reason() + ": " + original)
         else:
@@ -823,10 +942,11 @@ def recording_start():
     """Relay the STT recorder's VAD signal that real speech has begun, so the
     LED ring can leave DOA hunting and show it's actively listening. Also notes
     whether a persona was talking as it began, so its transcript can be judged."""
-    global recording_heard_persona
+    global recording_heard_persona, recording_began
 
     just_stopped = time.time() - last_spoke < SELF_HEAR_MARGIN
     recording_heard_persona = speaking or just_stopped
+    recording_began         = time.time()
 
     emit("recording_start", "")
     return {"ok": True}
@@ -838,9 +958,10 @@ def recording_stop():
     transcript follows -- lets the LED ring fall back to DOA hunting even if
     the speech didn't turn into a transcribed "heard" event. The transcript that
     follows belongs to this recording, so its self-hear verdict is handed on."""
-    global finished_heard_persona
+    global finished_heard_persona, finished_began
 
     finished_heard_persona = recording_heard_persona
+    finished_began         = recording_began
 
     emit("recording_stop", "")
     return {"ok": True}

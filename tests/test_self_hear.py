@@ -55,6 +55,9 @@ def fresh_start():
     hub.finished_heard_persona  = False
     hub.recent_replies          = ["Hello there, the persona words are these."]
     hub.held_inputs.clear()
+    hub.recording_began         = 0.0
+    hub.finished_began          = 0.0
+    hub.last_stop               = 0.0
 
 
 def persona_stopped(seconds_ago):
@@ -311,6 +314,162 @@ def test_ignored_message_names_the_persona():
 
     assert "Echo" in hub.ignored_reason()
     assert "Sal" not in hub.ignored_reason()
+
+
+def stop_was_sent(text, typed=False):
+    """Send input through dispatch() with the /stop call swapped out, and report whether a stop was sent."""
+    sent = []
+
+    def pretend_post(url, **kwargs):
+        """Stand-in for httpx.post(): note the URL instead of calling it."""
+        sent.append(url)
+
+    real_post      = hub.httpx.post
+    hub.httpx.post = pretend_post
+
+    try:
+        events.clear()
+        hub.dispatch(text, typed)
+    finally:
+        hub.httpx.post = real_post
+
+    return any(url.endswith("/stop") for url in sent)
+
+
+def test_bare_stop_stops_a_talking_persona():
+    """"Stop." on its own, said while the persona talks."""
+    fresh_start()
+    hub.speaking = True
+
+    assert stop_was_sent("Stop.")
+    assert hub.held_inputs == []
+
+
+def test_stop_later_in_a_short_recording_stops():
+    """The 2026-10-15 misses: "Echo, stop." and "Oh, and you know what? Uh... Stop." were held instead."""
+    fresh_start()
+    hub.speaking = True
+
+    assert stop_was_sent("Echo, stop.")
+    assert stop_was_sent("Oh, and you know what? Uh... Stop.")
+    assert hub.held_inputs == []
+
+
+def test_hush_and_be_quiet_stop():
+    """"hush" and "be quiet" are stop words too."""
+    fresh_start()
+    hub.speaking = True
+
+    assert stop_was_sent("Hush.")
+    assert stop_was_sent("Echo, hush now.")
+    assert stop_was_sent("Be quiet!")
+
+
+def test_be_quiet_also_switches_to_named_mode():
+    """Only "be quiet" changes the mode; "stop" and "hush" just stop."""
+    fresh_start()
+    hub.speaking = True
+    hub.MODE     = "open"
+
+    stop_was_sent("Hush.")
+    assert hub.MODE == "open"
+
+    stop_was_sent("Echo, be quiet.")
+    assert hub.MODE == "named"
+
+
+def test_quiet_alone_is_not_a_stop():
+    """"a quiet cat" (Echo's own recitation, heard by the mic) must not stop her."""
+    fresh_start()
+    hub.speaking = True
+
+    assert not stop_was_sent("A quiet cat.")
+
+
+def test_persona_saying_stop_in_a_phrase_does_not_stop_itself():
+    """The persona's own "don't stop now" coming back through the mic is echo, not a stop."""
+    fresh_start()
+    hub.speaking       = True
+    hub.recent_replies = ["Keep going, don't stop now."]
+
+    assert not stop_was_sent("don't stop now")
+
+
+def test_stop_mixed_with_persona_words_still_stops():
+    """The 2026-10-15 miss: "the morning light crept across the table. stop" -- her words, then the owner's stop."""
+    fresh_start()
+    hub.speaking       = True
+    hub.recent_replies = ["The morning light crept across the table. A quiet cat watched."]
+
+    assert stop_was_sent("the morning light crept across the table. stop")
+
+
+def test_long_mix_of_persona_words_and_stop_still_stops():
+    """2026-10-15: 11 words, but only 7 of them the owner's -- "a stranger's shadow passes" was Echo."""
+    fresh_start()
+    hub.speaking       = True
+    hub.recent_replies = ["Paper pages waited. A stranger's shadow passes by the door."]
+
+    assert stop_was_sent("A stranger's shadow passes. Oh, and you know what? Uh, stop.")
+
+
+def test_stop_drops_held_input():
+    """2026-10-15: a held "Hmm." was replayed after the stop and Echo started again."""
+    fresh_start()
+    hub.speaking = True
+
+    assert transcript_was_held("Hmm.")
+    assert stop_was_sent("Stop.")
+    assert hub.held_inputs == []
+
+
+def test_recording_from_before_the_stop_is_dropped():
+    """2026-10-15: "Rain tap." -- her voice, recorded as she was stopped -- was held and replayed."""
+    fresh_start()
+    hub.speaking = True
+    hub.recording_start()          # begins while she talks
+
+    stop_was_sent("Stop.")         # another recording stops her
+    hub.recording_stop()           # the first one ends after the stop
+
+    assert transcript_was_ignored("Rain tap.")
+    assert hub.held_inputs == []
+
+
+def test_recording_after_the_stop_is_held_as_usual():
+    """Talking over a persona that started again after a stop is held, like any talk-over."""
+    fresh_start()
+    hub.speaking  = True
+    hub.last_stop = time.time() - 5.0
+
+    hub.recording_start()
+    hub.recording_stop()
+
+    assert transcript_was_held("oh I actually meant a font")
+
+
+def test_long_sentence_with_stop_is_not_a_stop():
+    """Over STOP_MAX_WORDS words it is a sentence: held, not a stop."""
+    fresh_start()
+    hub.speaking = True
+
+    assert not stop_was_sent("I wonder whether the bus will stop at the corner today or not")
+    assert len(hub.held_inputs) == 1
+
+
+def test_stop_in_a_question_is_not_a_stop_when_nobody_talks():
+    """Nobody talking: "how do I stop a process" is a question for the personas."""
+    fresh_start()
+
+    assert not stop_was_sent("how do I stop a process", typed=True)
+
+
+def test_typed_stop_stops_a_talking_persona():
+    """Typing "Echo, stop" while she talks stops her too."""
+    fresh_start()
+    hub.speaking = True
+
+    assert stop_was_sent("Echo, stop", typed=True)
 
 
 def test_display_names():

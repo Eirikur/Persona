@@ -98,3 +98,43 @@ Owner was tired; re-test these in the morning before trusting them.
 4. **Wanted:** when one persona hears its name in named mode, don't switch
    *everyone* to open mode, only that conversation. (Related to point 3, and
    to the open question in memory: should mode/state be per-persona?)
+
+## 2026-10-15: stop investigated and fixed
+
+Re-tested with Echo reciting pasted text (a valid test: same speak path).
+
+Findings:
+- Speech-out's /stop works: tested directly, a long reply went silent 20 ms
+  after /stop.
+- A bare "Stop." said as its own recording worked live (cut Echo off ~5 s in).
+- Misses were all in the hub's dispatch():
+  - "Echo, stop." / "Oh, and you know what? Uh... Stop." didn't *start*
+    with "stop", so they were held as talk-over and replayed afterwards.
+  - The mic merges Echo's words with the owner's ("the morning light crept
+    across the table. stop"), which the first fix's echo check wrongly
+    dropped as self-hear.
+  - Fragments of Echo's voice recorded as she was stopped ("Rain tap.",
+    "Brain tap.") were garbled enough to pass as the owner's, so were held
+    and replayed after the stop; so was a held "Hmm.".
+- Some early misses were simply the mic being muted.
+
+What was built (persona_hub.py, tests in tests/test_self_hear.py):
+- STOP_WORDS = stop, hush, be quiet. While a persona talks, one anywhere in
+  a recording with at most STOP_MAX_WORDS (8) of the owner's own words
+  (words not in recent replies) is a stop. When nobody talks, only input
+  starting with "stop" is, so "how do I stop a process" still reaches the
+  personas.
+- Echo veto: a stop-containing recording that is mostly the persona's words
+  is ignored, but only if a recent reply itself contains a stop word.
+- "be quiet" stops speech *and* switches to named mode; stop/hush only stop.
+- A stop clears held input and drops any recording that began before it
+  ("ignored (recorded before stop)"). The clear happens *before* the /stop
+  call, else the stopped reply's speech_finished() could replay one in the
+  gap (race caught by the advisor).
+- Stops now log `stop: '...'` in hub.log (they left no trace before).
+
+Still open:
+- A stop only ends the reply playing now. Replies waiting on speech-out's
+  reply_lock, and hub-side replies still being generated, play afterwards.
+  Matters with several personas loaded. Separate next step (speech-out).
+- Owner's points 3 and 4 above (global named mode) untouched.
