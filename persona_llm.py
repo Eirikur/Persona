@@ -51,7 +51,12 @@ PROVIDERS = {
     "ollama":     ("http://localhost:11434/v1",  None,               DEFAULT_MODELS["ollama"]),
     "openai":     (None,                         "OPENAI_API_KEY",   DEFAULT_MODELS["openai"]),
     "cerebras":   ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", DEFAULT_MODELS["cerebras"]),
-    "perplexity": ("https://api.perplexity.ai",  "PPLX_API_KEY",     DEFAULT_MODELS["perplexity"]),
+    # Perplexity as a persona's own model is switched off: its old
+    # /chat/completions endpoint (Sonar) was retired in favour of the Agent API
+    # (/v1/agent). Wanted back later as a persona of its own, including
+    # follow-up questions (the Agent API's previous_response_id looks like the
+    # way). Until then Perplexity is used through the "research" tool.
+    # "perplexity": ("https://api.perplexity.ai",  "PPLX_API_KEY",     DEFAULT_MODELS["perplexity"]),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", DEFAULT_MODELS["openrouter"]),
 }
 

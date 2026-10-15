@@ -73,7 +73,7 @@ web UI — a separate product from Perplexity Pro, billed independently.
 
 Design: `perplexity_search()` in `persona_tools.py`, structurally a near-twin
 of `web_search()` — calls a chat-completions endpoint instead of a search
-endpoint — gated by its own env var (`PERPLEXITY_API_KEY`).
+endpoint — gated by its own env var (`PPLX_API_KEY`).
 
 Not built. Owner wants both this and `fetch_page` (2026-09-27: "I think I
 want both").

@@ -39,7 +39,7 @@ DEFAULT_MODELS = {
     "ollama":     "gemma3:12b",
     "openai":     "gpt-4o-mini",
     "cerebras":   "qwen-3.8-27b",
-    "perplexity": "sonar",
+    # "perplexity": "sonar",   switched off, see PROVIDERS in persona_llm.py
     "openrouter": "google/gemini-2.0-flash-001",
     "echo":       "just an echo",
 }
