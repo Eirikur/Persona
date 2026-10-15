@@ -67,10 +67,12 @@ class ChatRequest(BaseModel):
     system_prompt: str = "You are Persona, a helpful voice assistant."
     messages: list[dict]
     tools: list[str] = []   # names into persona_tools.TOOLS this persona may call
+    persona: str = ""       # who is asking; only used to label tool results for the data window
 
 
-def run_tool_call(call) -> dict:
-    """Run one model-requested tool call and return its result as a tool message."""
+def run_tool_call(call, persona: str, question: str) -> dict:
+    """Run one model-requested tool call and return its result as a tool
+    message. The hub gets a copy of the result for the data window."""
     try:
         httpx.post(f"{HUB_URL}/tool_call/{call.function.name}", timeout=1.0)
     except Exception:
@@ -81,7 +83,29 @@ def run_tool_call(call) -> dict:
         result = tool["run"](json.loads(call.function.arguments))
     else:
         result = f"Unknown tool: {call.function.name}"
+
+    report_tool_result(persona, question, call.function.name, call.function.arguments, result)
+
     return {"role": "tool", "tool_call_id": call.id, "content": result}
+
+
+def report_tool_result(persona: str, question: str, tool: str, arguments: str, result: str) -> None:
+    """
+    Send the hub what a tool was asked and what it returned, exactly as the
+    model sent and received them, so the owner can see it in the data window.
+    """
+    record = {
+        "persona":   persona,
+        "question":  question,
+        "tool":      tool,
+        "arguments": arguments,
+        "result":    result,
+    }
+
+    try:
+        httpx.post(f"{HUB_URL}/tool_result", json=record, timeout=1.0)
+    except Exception:
+        pass  # a missing copy for the data window shouldn't block the reply
 
 
 @app.post("/v1/chat/completions")
@@ -130,7 +154,10 @@ async def chat(req: ChatRequest):
                 for call in message.tool_calls
             ],
         })
-        messages.extend(run_tool_call(call) for call in message.tool_calls)
+        question = req.messages[-1]["content"] if req.messages else ""
+
+        for call in message.tool_calls:
+            messages.append(run_tool_call(call, req.persona, question))
 
     return response.model_dump()
 

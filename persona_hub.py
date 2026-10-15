@@ -36,6 +36,7 @@ from persona_schemas import (
     clean_setup_name, load, save, save_setup,
 )
 from persona_scripts import SCRIPTS, script_output
+import persona_data_window
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
 
@@ -435,6 +436,7 @@ def llm(persona: Persona, text: str) -> str:
         "system_prompt": persona.system_prompt,
         "messages":      [{"role": "user", "content": text}],
         "tools":         persona.tools,
+        "persona":       display_name(persona.name),
     })
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
@@ -840,6 +842,14 @@ class ThinkRequest(BaseModel):
     speaker:  str  = "you"   # chat-bubble label for this input; overridden by e.g. the test trigger
 
 
+class ToolResult(BaseModel):
+    persona:   str   # display name of the persona that called the tool
+    question:  str   # the input that persona was answering
+    tool:      str
+    arguments: str   # exactly as the model sent them (JSON text)
+    result:    str   # exactly as the model got it back
+
+
 @app.get("/state")
 def get_state():
     """Report current mode, the loaded roster, and the active persona's provider/model."""
@@ -974,6 +984,34 @@ def tool_call(name: str):
     just the model thinking."""
     emit("tool_call", name)
     return {"ok": True}
+
+
+@app.post("/tool_result")
+def tool_result(report: ToolResult):
+    """Keep a copy of what a tool returned, for the data window. Only a
+    one-line notice goes over the event stream; the window fetches the rest."""
+    record = persona_data_window.add_record(
+        report.persona, report.question, report.tool, report.arguments, report.result,
+    )
+
+    emit("tool_result", persona_data_window.notice_text(record), id=record["id"], error=False)
+    return {"ok": True}
+
+
+@app.get("/data/recent")
+def data_recent():
+    """Every kept tool result, newest first, for the data window to show when it opens."""
+    return persona_data_window.recent_records()
+
+
+@app.get("/data/{record_id}")
+def data_record(record_id: int):
+    """One kept tool result, fetched by the data window when a notice for it arrives."""
+    record = persona_data_window.find_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no such tool result (forgotten, or the hub restarted)")
+
+    return record
 
 
 @app.post("/playback_start")
