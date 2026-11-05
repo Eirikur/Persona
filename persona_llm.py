@@ -26,6 +26,8 @@ import json
 import os
 import uvicorn
 import httpx
+import openai
+from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -184,6 +186,94 @@ async def chat(req: ChatRequest):
     # its final tool request, often nothing.
     save_calls(calls_made, response.choices[0].message.content or "")
     return response.model_dump()
+
+
+# ─── Provider Check ───────────────────────────────────────────────────────────
+
+MODEL_LIST_TIMEOUT = 10.0   # seconds per provider; a working one answers in well under that
+
+
+def url_looks_wrong(url: str | None) -> str:
+    """
+    Why a provider URL is plainly broken (spaces in it, no http/https, no
+    host name), or "" if it looks fine. This catches typos before any call:
+    a mistyped host and a service that's switched off fail the same way.
+    """
+    if url is None:
+        return ""   # the OpenAI client's own built-in URL
+
+    if " " in url:
+        return "the URL has a space in it: " + repr(url)
+
+    parts = urlsplit(url)
+
+    if parts.scheme not in ("http", "https"):
+        return "the URL doesn't start with http:// or https://: " + repr(url)
+
+    if not parts.hostname:
+        return "the URL has no host name: " + repr(url)
+
+    return ""
+
+
+async def fetch_models(provider: str) -> dict:
+    """
+    Ask one provider for its model list, the same way chat() reaches it.
+    The answer says how it went:
+
+      ok            -- models holds every model id
+      bad_url       -- the URL itself is broken, nothing was sent
+      no_key        -- the URL works but no API key is set for it
+      key_rejected  -- the URL works but the provider refused the key
+      unreachable   -- no answer (wrong host, or the service is off)
+      error         -- anything else; reason says what
+    """
+    base_url, key_env, default_model = PROVIDERS[provider]
+    has_key = bool(key_env and os.environ.get(key_env))
+    api_key = os.environ.get(key_env, "local") if key_env else "local"
+
+    answer = {"provider": provider, "status": "ok", "reason": "", "models": []}
+
+    problem = url_looks_wrong(base_url)
+    if problem:
+        answer["status"] = "bad_url"
+        answer["reason"] = problem
+        return answer
+
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=MODEL_LIST_TIMEOUT, max_retries=0)
+
+    try:
+        page = await client.models.list()
+        answer["models"] = [model.id for model in page.data]
+
+    except (openai.AuthenticationError, openai.PermissionDeniedError) as refused:
+        if has_key:
+            answer["status"] = "key_rejected"
+        else:
+            answer["status"] = "no_key"
+        answer["reason"] = str(refused)
+
+    except openai.APIConnectionError as no_answer:
+        answer["status"] = "unreachable"
+        answer["reason"] = str(no_answer) + " (" + str(base_url) + ")"
+
+    except Exception as other:
+        answer["status"] = "error"
+        answer["reason"] = type(other).__name__ + ": " + str(other)
+
+    return answer
+
+
+@app.get("/provider_models")
+async def provider_models():
+    """Every real provider's model list, or why it couldn't be fetched.
+    The hub calls this at startup to prove each provider's URL works."""
+    answers = []
+
+    for provider in PROVIDERS:
+        answers.append(await fetch_models(provider))
+
+    return answers
 
 
 if __name__ == "__main__":

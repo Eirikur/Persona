@@ -29,6 +29,10 @@ from pathlib import Path
 
 STATE_FILE = Path.home() / ".config" / "persona" / "state.json"
 
+# One JSON file per provider: the models it offered at the last startup check
+# (see persona_model_lists.py).
+MODEL_LIST_DIR = Path.home() / ".local" / "share" / "persona" / "model_lists"
+
 
 # ─── Default Models ───────────────────────────────────────────────────────────
 
@@ -42,6 +46,14 @@ DEFAULT_MODELS = {
     # "perplexity": "sonar",   switched off, see PROVIDERS in persona_llm.py
     "openrouter": "google/gemini-2.0-flash-001",
     "echo":       "just an echo",
+}
+
+# How System says each provider's name out loud.
+PROVIDER_NAMES = {
+    "ollama":     "Ollama",
+    "openai":     "OpenAI",
+    "cerebras":   "Cerebras",
+    "openrouter": "OpenRouter",
 }
 
 

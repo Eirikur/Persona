@@ -32,11 +32,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from persona_schemas import (
-    DEFAULT_MODELS, PRESET_VOICES, SPEECH_EVENT_TYPES, Persona, VoiceProfile,
-    clean_setup_name, load, save, save_setup,
+    DEFAULT_MODELS, PRESET_VOICES, PROVIDER_NAMES, SPEECH_EVENT_TYPES, Persona,
+    VoiceProfile, clean_setup_name, load, save, save_setup,
 )
 from persona_scripts import SCRIPTS, script_output
 import persona_data_window
+from persona_model_lists import announcement, load_list, new_models, save_list
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
 
@@ -252,6 +253,8 @@ async def startup_event():
     event_loop = asyncio.get_running_loop()
 
     start_tailing(emit_log_line)
+
+    threading.Thread(target=check_providers, daemon=True).start()
 
     # Warmup the active persona's LLM to avoid first-turn latency (e.g. Ollama loading)
     try:
@@ -541,6 +544,98 @@ def speech_finished() -> None:
     oldest held voice input, if any (see hold_input)."""
     emit("speak_done", "")
     replay_held_input()
+
+
+# ─── Provider Check ───────────────────────────────────────────────────────────
+
+PROVIDER_CHECK_WAIT = 120   # seconds to wait for the LLM service, chat page and speech-out
+
+
+def wait_until(ready, seconds: float) -> bool:
+    """Call ready() every two seconds until it returns True, or give up
+    after this many seconds. Returns whether it became ready."""
+    give_up_at = time.time() + seconds
+
+    while time.time() < give_up_at:
+        if ready():
+            return True
+        time.sleep(2)
+
+    return False
+
+
+def answers_http(url: str) -> bool:
+    """True if anything answers at this URL, even "not found": the service is up."""
+    try:
+        httpx.get(url, timeout=2.0)
+        return True
+    except httpx.HTTPError:
+        return False
+
+
+def check_providers() -> None:
+    """
+    At startup, fetch every provider's model list through the LLM service.
+    A list that comes back proves the provider's URL (and key) work. Each
+    result goes to TRACE; it's flagged as an error when the URL is broken,
+    or when a persona actually uses that provider.
+
+    The list is kept (persona_model_lists.py). Models not in the kept list
+    are named in TRACE, and System says so out loud. The first listing for
+    a provider is only kept, not announced.
+
+    Runs in its own thread, and first waits for the chat page (or TRACE
+    lines would be sent to nobody) and for speech-out (or System couldn't
+    speak). Everything is also printed, for the hub log.
+    """
+    wait_until(lambda: answers_http(LLM_URL + "/docs"), PROVIDER_CHECK_WAIT)
+    wait_until(lambda: len(event_queues) > 0, PROVIDER_CHECK_WAIT)
+    wait_until(lambda: answers_http(SPEECH_OUTPUT_URL + "/docs"), PROVIDER_CHECK_WAIT)
+
+    try:
+        answers = httpx.get(LLM_URL + "/provider_models", timeout=60.0).json()
+    except httpx.HTTPError as problem:
+        print(f"provider check failed: {problem}")
+        emit("log", "provider check failed: the LLM service didn't answer (" + type(problem).__name__ + ")", error=True)
+        return
+
+    providers_in_use = set(persona.provider for persona in state.personas.values())
+    spoken = []
+
+    for answer in answers:
+        provider = answer["provider"]
+        status   = answer["status"]
+        models   = answer["models"]
+        name     = PROVIDER_NAMES.get(provider, provider)
+
+        if status != "ok":
+            text    = "provider " + name + ": " + status + " -- " + answer["reason"]
+            serious = status == "bad_url" or provider in providers_in_use
+            if not serious:
+                text = text + " (no persona uses it)"
+            print(text)
+            emit("log", text, error=serious)
+            continue
+
+        kept = load_list(provider)
+        save_list(provider, models)
+
+        if kept is None:
+            text = "provider " + name + ": OK, " + str(len(models)) + " models (first listing, kept for next time)"
+            print(text)
+            emit("log", text, error=False)
+            continue
+
+        added = new_models(kept, models)
+        text  = "provider " + name + ": OK, " + str(len(models)) + " models, " + str(len(added)) + " new"
+        if added:
+            text = text + ": " + ", ".join(added)
+            spoken.append(announcement(name, added))
+        print(text)
+        emit("log", text, error=False)
+
+    if spoken:
+        say_summary(" ".join(spoken))
 
 
 # ─── Held Voice Input ─────────────────────────────────────────────────────────
