@@ -8,6 +8,15 @@ persona_schemas.py.
 
 The history lives in memory only. A hub restart starts every persona fresh.
 
+mem0 (optional, the "mem0" box on the Settings tab): after each exchange,
+mem0's hosted service reads it and its own LLM decides what is worth
+keeping ("User has a dog named Rufus"). Before each reply, the memories
+closest to the new message are added to the end of the system prompt
+under "Memories:", the way mem0's companion example does it. Saving takes
+mem0 a few seconds; replay covers the gap. mem0 is called over its plain
+REST API with httpx, so what is sent and received is exactly what the hub
+log shows.
+
 The prompt that goes to the LLM is a list of messages, each a role and some
 text, in this order:
 
@@ -20,9 +29,16 @@ text, in this order:
 persona_hub.py only calls into this file; it never handles the history itself.
 """
 
+import os
 import threading
+import time
 
-from persona_schemas import REPLAY_EXCHANGES
+import httpx
+
+from persona_schemas import (
+    MEM0_ADD_TIMEOUT, MEM0_SEARCH_TIMEOUT, MEM0_TOP_K, MEM0_URL, MEM0_USER_ID,
+    REPLAY_EXCHANGES,
+)
 
 
 # ─── Conversation History ─────────────────────────────────────────────────────
@@ -72,6 +88,103 @@ def exchanges_kept(persona_name: str) -> int:
     """How many earlier exchanges this persona would replay right now."""
     with history_lock:
         return len(history.get(persona_name, [])) // 2
+
+
+# ─── mem0 ─────────────────────────────────────────────────────────────────────
+
+def mem0_key() -> str:
+    """The mem0 API key from MEM0_API_KEY (set in .env), or "" if there is none."""
+    return os.environ.get("MEM0_API_KEY", "")
+
+
+def mem0_headers() -> dict:
+    """The header every mem0 request carries: the API key, mem0's "Token" style."""
+    return {"Authorization": "Token " + mem0_key()}
+
+
+def mem0_search(text: str) -> list[str]:
+    """
+    Ask mem0 for the stored memories closest to this text, best match first,
+    and return their wording. Each hit and its score goes to the hub log.
+
+    The reply is waiting on this, so any trouble (no key, no answer in
+    MEM0_SEARCH_TIMEOUT seconds, an error) means no memories this turn,
+    with a line in the log saying why.
+    """
+    if not mem0_key():
+        print("mem0 search skipped: no MEM0_API_KEY in .env")
+        return []
+
+    request = {
+        "query":   text,
+        "filters": {"user_id": MEM0_USER_ID},
+        "top_k":   MEM0_TOP_K,
+    }
+
+    started = time.time()
+
+    try:
+        answer = httpx.post(MEM0_URL + "/v3/memories/search/", json=request,
+                            headers=mem0_headers(), timeout=MEM0_SEARCH_TIMEOUT)
+        answer.raise_for_status()
+        results = answer.json()["results"]
+    except Exception as problem:
+        print(f"mem0 search failed, no memories this turn: {type(problem).__name__} {problem}")
+        return []
+
+    seconds = time.time() - started
+    print(f"mem0 search: {len(results)} memories in {seconds:.2f}s")
+
+    memories = []
+    for result in results:
+        print(f"  {result['score']:.3f}  {result['memory']}")
+        memories.append(result["memory"])
+
+    return memories
+
+
+def memories_block(memories: list[str]) -> str:
+    """
+    The text added to the end of the system prompt: "Memories:" and one
+    memory per line. Empty when there are none, so the prompt is unchanged.
+    """
+    if not memories:
+        return ""
+
+    lines = ["", "", "Memories:"]
+    for memory in memories:
+        lines.append("- " + memory)
+
+    return "\n".join(lines)
+
+
+def mem0_save(text: str, reply: str) -> None:
+    """
+    Hand one exchange to mem0, which decides on its own what (if anything)
+    to remember from it. mem0 answers at once with "PENDING" and does the
+    work over the next few seconds. Meant to run in a background thread.
+    """
+    if not mem0_key() or not reply.strip():
+        return
+
+    request = {
+        "messages": [
+            {"role": "user",      "content": text},
+            {"role": "assistant", "content": reply},
+        ],
+        "user_id": MEM0_USER_ID,
+    }
+
+    started = time.time()
+
+    try:
+        answer = httpx.post(MEM0_URL + "/v3/memories/add/", json=request,
+                            headers=mem0_headers(), timeout=MEM0_ADD_TIMEOUT)
+        answer.raise_for_status()
+        seconds = time.time() - started
+        print(f"mem0 save ({seconds:.1f}s): " + answer.text)
+    except Exception as problem:
+        print(f"mem0 save failed: {type(problem).__name__} {problem}")
 
 
 # ─── Showing the Prompt ───────────────────────────────────────────────────────

@@ -108,6 +108,16 @@ REPLAY_EXCHANGES = 10
 # hub log on every LLM call, so it can be read in the Logs tab.
 LOG_PROMPTS = True
 
+# mem0 (hosted, free tier): when the "mem0" box on the Settings tab is ticked,
+# mem0's own LLM reads every exchange and decides what is worth keeping, and
+# the memories closest to each new message are added to the system prompt.
+# The API key is MEM0_API_KEY in .env.
+MEM0_URL            = "https://api.mem0.ai"
+MEM0_USER_ID        = "eirikur"   # whose memories these are; every persona shares them
+MEM0_TOP_K          = 5           # most memories added to one prompt
+MEM0_SEARCH_TIMEOUT = 3.0         # seconds; the reply waits for this, so keep it short
+MEM0_ADD_TIMEOUT    = 30.0        # seconds; saving runs in the background
+
 
 # ─── Log Sources ──────────────────────────────────────────────────────────────
 

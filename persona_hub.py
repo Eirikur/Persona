@@ -5,6 +5,7 @@
 #     "fastapi",
 #     "uvicorn",
 #     "httpx",
+#     "python-dotenv",
 # ]
 # ///
 
@@ -21,6 +22,7 @@ import asyncio
 import json
 import re
 import subprocess
+import sys
 import threading
 import time
 import uvicorn
@@ -28,6 +30,7 @@ import httpx
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -39,6 +42,14 @@ from persona_schemas import (
 from persona_scripts import SCRIPTS, script_output
 import persona_data_window
 import persona_memory
+
+load_dotenv()   # API keys from .env (mem0's, for persona_memory.py)
+
+# The hub's output goes to logs/hub.log, and Python holds file output back
+# in 8 KB blocks. Write each line as it is printed instead, so the Logs tab
+# shows what happened when it happened -- including lines printed later by
+# background threads, like mem0's saves.
+sys.stdout.reconfigure(line_buffering=True)
 from persona_model_lists import announcement, load_list, new_models, save_list
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
@@ -236,6 +247,7 @@ last_stop       = 0.0   # when a stop word last silenced a persona
 
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
 MUTED          = False     # True = ignore voice input; typed input still goes through
+MEM0_ON        = False     # True = mem0 picks memories for each prompt (Settings tab box)
 shutdown_timer = None      # pending threading.Timer, or None if no shutdown is queued
 
 
@@ -983,6 +995,7 @@ def get_state():
     return {
         "mode":             MODE,
         "muted":            MUTED,
+        "mem0":             MEM0_ON,
         "persona":          state.active_persona,
         "provider":         persona.provider,
         "model":            persona.model,
@@ -1032,6 +1045,28 @@ def think(req: ThinkRequest):
     persona = state.personas[state.active_persona]
     messages = [{"role": "user", "content": req.text}]
     return {"text": llm(persona, persona.system_prompt, messages)}
+
+
+@app.post("/memory/mem0/{setting}")
+def set_mem0(setting: str):
+    """
+    Turn mem0 on or off ("on" / "off"), from the Settings tab's mem0 box.
+    Replay of recent exchanges stays on either way. Refuses to turn on
+    without an API key, so the box can't look ticked while doing nothing.
+    """
+    global MEM0_ON
+
+    if setting not in ("on", "off"):
+        raise HTTPException(status_code=400, detail="mem0 setting must be on or off")
+
+    if setting == "on" and not persona_memory.mem0_key():
+        emit("log", "mem0 not turned on: no MEM0_API_KEY in .env")
+        raise HTTPException(status_code=400, detail="no MEM0_API_KEY in .env")
+
+    MEM0_ON = setting == "on"
+    print(f"mem0 → {setting}")
+    emit("log", "mem0 " + setting)
+    return {"mem0": MEM0_ON}
 
 
 @app.post("/mode/{mode}")
@@ -1410,12 +1445,25 @@ def converse(req: ThinkRequest):
         messages = persona_memory.messages_for(pname, req.text)
         print(f"[{pname}] replaying {len(messages) - 1} earlier messages")
 
+        # With mem0 on, the memories closest to the input join the system
+        # prompt. Echo never calls a model, so it has no use for them.
+        use_mem0      = MEM0_ON and persona.provider != "echo"
+        system_prompt = persona.system_prompt
+
+        if use_mem0:
+            memories      = persona_memory.mem0_search(req.text)
+            system_prompt = system_prompt + persona_memory.memories_block(memories)
+
         # Time LLM inference
         llm_start = time.time()
-        response = llm(persona, persona.system_prompt, messages)
+        response = llm(persona, system_prompt, messages)
         llm_duration = time.time() - llm_start
 
         persona_memory.remember_exchange(pname, req.text, response)
+
+        if use_mem0:
+            threading.Thread(target=persona_memory.mem0_save,
+                             args=(req.text, response), daemon=True).start()
 
         if response:
             print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")

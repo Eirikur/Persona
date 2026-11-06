@@ -543,6 +543,11 @@
     color: var(--text-muted);
   }
 
+  .setting-row .setting-note {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
   .setting-row select,
   .setting-row input[type="text"] {
     background: var(--surface);
@@ -633,6 +638,12 @@
       <label for="setting-model">model</label>
       <input id="setting-model" type="text" placeholder="default for provider">
       <button id="setting-model-apply" class="test-btn">Apply</button>
+    </div>
+
+    <div class="setting-row">
+      <label for="setting-mem0">memory</label>
+      <input id="setting-mem0" type="checkbox">
+      <span class="setting-note">mem0 picks what to remember (recent turns are always replayed)</span>
     </div>
 
   </div>
@@ -1207,6 +1218,7 @@
   const providerSelect = document.getElementById('setting-provider');
   const modelInput     = document.getElementById('setting-model');
   const modelApplyBtn  = document.getElementById('setting-model-apply');
+  const mem0Box        = document.getElementById('setting-mem0');
 
   function loadSettings() {
     fetch('/state')
@@ -1215,6 +1227,7 @@
         modeSelect.value     = s.mode;
         providerSelect.value = s.provider;
         modelInput.value     = s.model || '';
+        mem0Box.checked      = s.mem0;
       });
   }
 
@@ -1228,6 +1241,14 @@
 
   modelApplyBtn.addEventListener('click', () => {
     fetch(`/model/${encodeURIComponent(modelInput.value)}`, {method: 'POST'});
+  });
+
+  // The box shows what the hub says, not what was clicked: the hub refuses
+  // to turn mem0 on without an API key, and then the box un-ticks itself.
+  mem0Box.addEventListener('change', () => {
+    const wanted = mem0Box.checked ? 'on' : 'off';
+    fetch('/memory/mem0/' + wanted, {method: 'POST'})
+      .then(() => loadSettings());
   });
 
   // ── roster: every known persona, dim unless present in the chat ──
