@@ -82,18 +82,42 @@ NEWS_MAX_ITEMS = 8
 
 # How deep persona_tools.research may go, and the Perplexity Agent API preset
 # each depth uses. Deeper is slower and costs more: on 2026-10-15 "quick" took
-# 2 s and "normal" 5.5 s, each well under a cent.
+# 2 s and "normal" 5.5 s, each well under a cent. Perplexity also has "xhigh",
+# open-ended agent work that can run code; research has no use for it.
 RESEARCH_PRESETS = {
-    "quick":  "fast",     # one search, single facts
-    "normal": "low",      # a few searches, may read a page
-    "deep":   "medium",   # many steps, many sources; can take minutes
+    "quick":   "fast",     # one search, single facts
+    "normal":  "low",      # a few searches, may read a page
+    "deep":    "medium",   # many steps, many sources; can take minutes
+    "deepest": "high",     # exhaustive source coverage; slowest, costs most
 }
 
-# Depths a persona may actually use. "deep" stays out until it can run in
-# the background instead of holding up a spoken reply.
+# Depths a persona may pick on its own. The deeper ones hold up a spoken
+# reply for minutes, so only the owner can ask for them: the "research" row
+# on the Settings tab, or a RESEARCH_DEEP_PHRASES phrase in the question.
 RESEARCH_ALLOWED_DEPTHS = ("quick", "normal")
 
-RESEARCH_TIMEOUT = 50   # seconds; the hub gives up on a whole reply after 60
+# Seconds one research call may take, by depth.
+RESEARCH_TIMEOUTS = {
+    "quick":   50,
+    "normal":  50,
+    "deep":    300,
+    "deepest": 300,
+}
+
+# How long the hub waits for a whole reply, which may hold several research
+# calls (see MAX_TOOL_ROUNDS in persona_llm.py). The long wait is used only
+# when the turn's research depth is "deep" or "deepest".
+REPLY_WAIT      = 60    # seconds
+REPLY_WAIT_DEEP = 960   # seconds; three deep calls of up to 300 s, plus the answer
+
+# Saying one of these anywhere in a question makes that one question's
+# research "deep", whatever the Settings tab says.
+RESEARCH_DEEP_PHRASES = (
+    "research deeply",
+    "deep research",
+    "dig deep",
+    "research thoroughly",
+)
 
 
 # ─── Memory ───────────────────────────────────────────────────────────────────

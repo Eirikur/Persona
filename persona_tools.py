@@ -21,7 +21,7 @@ import httpx
 
 from persona_schemas import (
     NEWS_SOURCES, NEWS_MAX_ITEMS,
-    RESEARCH_PRESETS, RESEARCH_ALLOWED_DEPTHS, RESEARCH_TIMEOUT,
+    RESEARCH_PRESETS, RESEARCH_TIMEOUTS,
 )
 
 
@@ -180,8 +180,9 @@ def research_answer(response: dict) -> str:
 def research(args: dict) -> dict | str:
     """
     Ask Perplexity to research a question and return its answer with a
-    numbered source list. Depth picks the preset (see RESEARCH_PRESETS);
-    a depth not in RESEARCH_ALLOWED_DEPTHS is lowered to "normal".
+    numbered source list. Depth picks the preset (see RESEARCH_PRESETS) and
+    the time limit; an unknown depth is treated as "normal". Which depths a
+    persona may choose on its own is decided in persona_llm.py.
     """
     api_key = os.environ.get("PPLX_API_KEY")
     if not api_key:
@@ -189,18 +190,20 @@ def research(args: dict) -> dict | str:
 
     query = args.get("query", "")
     depth = args.get("depth", "quick")
-    if depth not in RESEARCH_ALLOWED_DEPTHS:
+    if depth not in RESEARCH_PRESETS:
         depth = "normal"
+
+    timeout = RESEARCH_TIMEOUTS[depth]
 
     try:
         reply = httpx.post(
             "https://api.perplexity.ai/v1/agent",
             headers = {"Authorization": "Bearer " + api_key},
             json    = {"preset": RESEARCH_PRESETS[depth], "input": query},
-            timeout = RESEARCH_TIMEOUT,
+            timeout = timeout,
         )
     except httpx.TimeoutException:
-        return "Research timed out after " + str(RESEARCH_TIMEOUT) + " seconds."
+        return "Research (" + depth + ") timed out after " + str(timeout) + " seconds."
 
     if reply.status_code != 200:
         return "Research failed: " + str(reply.status_code) + " " + reply.text[:200]

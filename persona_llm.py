@@ -33,7 +33,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from persona_schemas import DEFAULT_MODELS
+from persona_schemas import DEFAULT_MODELS, RESEARCH_ALLOWED_DEPTHS
 from persona_tools import TOOLS
 from persona_tool_log import save_calls
 
@@ -76,20 +76,46 @@ class ChatRequest(BaseModel):
     messages: list[dict]
     tools: list[str] = []   # names into persona_tools.TOOLS this persona may call
     persona: str = ""       # who is asking; only used to label tool results for the data window
+    research_depth: str = "auto"   # the owner's research depth; "auto" = the persona chooses
 
 
-def run_tool_call(call, persona: str, question: str, calls_made: list) -> dict:
+def research_depth_to_use(args: dict, owner_depth: str) -> str:
+    """
+    The depth a research call actually runs at. The owner's choice (Settings
+    tab, or a spoken phrase) wins. On "auto" the persona's own choice is used,
+    but only up to RESEARCH_ALLOWED_DEPTHS: deeper ones hold up a spoken reply
+    for minutes, so the persona can't pick them on its own.
+    """
+    if owner_depth != "auto":
+        return owner_depth
+
+    chosen = args.get("depth", "quick")
+    if chosen not in RESEARCH_ALLOWED_DEPTHS:
+        chosen = "normal"
+
+    return chosen
+
+
+def run_tool_call(call, persona: str, question: str, calls_made: list, research_depth: str) -> dict:
     """Run one model-requested tool call and return its result as a tool
     message. The hub gets a copy of the result for the data window, and
-    calls_made gets one for the tool log once the reply is finished."""
+    calls_made gets one for the tool log once the reply is finished.
+    A research call runs at research_depth_to_use()'s depth, and the copies
+    show the arguments as actually run, depth included."""
     try:
         httpx.post(f"{HUB_URL}/tool_call/{call.function.name}", timeout=1.0)
     except Exception:
         pass  # the hub being briefly unavailable shouldn't block the tool call
 
+    args = json.loads(call.function.arguments)
+
+    if call.function.name == "research":
+        args["depth"] = research_depth_to_use(args, research_depth)
+        print(f"research at depth {args['depth']}: {args.get('query', '')}")
+
     tool = TOOLS.get(call.function.name)
     if tool:
-        output = tool["run"](json.loads(call.function.arguments))
+        output = tool["run"](args)
     else:
         output = f"Unknown tool: {call.function.name}"
 
@@ -106,7 +132,7 @@ def run_tool_call(call, persona: str, question: str, calls_made: list) -> dict:
         "persona":   persona,
         "question":  question,
         "tool":      call.function.name,
-        "arguments": call.function.arguments,
+        "arguments": json.dumps(args, ensure_ascii=False),
         "result":    result,
         "data":      data,
     }
@@ -180,7 +206,7 @@ async def chat(req: ChatRequest):
         question = req.messages[-1]["content"] if req.messages else ""
 
         for call in message.tool_calls:
-            messages.append(run_tool_call(call, req.persona, question, calls_made))
+            messages.append(run_tool_call(call, req.persona, question, calls_made, req.research_depth))
 
     # Out of tool rounds. Every tool result is in messages by now, so ask one
     # last time with tool calls switched off (tool_choice "none"): the model

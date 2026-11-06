@@ -646,6 +646,17 @@
       <span class="setting-note">mem0 picks what to remember (recent turns are always replayed)</span>
     </div>
 
+    <div class="setting-row">
+      <label for="setting-research">research</label>
+      <select id="setting-research">
+        <option value="auto">auto (persona chooses quick or normal)</option>
+        <option value="quick">quick (one search, seconds)</option>
+        <option value="normal">normal (a few searches)</option>
+        <option value="deep">deep (many sources, can take minutes)</option>
+        <option value="deepest">deepest (exhaustive, slowest, costs most)</option>
+      </select>
+    </div>
+
   </div>
 
   <div id="state-strip">
@@ -1219,6 +1230,7 @@
   const modelInput     = document.getElementById('setting-model');
   const modelApplyBtn  = document.getElementById('setting-model-apply');
   const mem0Box        = document.getElementById('setting-mem0');
+  const researchSelect = document.getElementById('setting-research');
 
   function loadSettings() {
     fetch('/state')
@@ -1228,6 +1240,7 @@
         providerSelect.value = s.provider;
         modelInput.value     = s.model || '';
         mem0Box.checked      = s.mem0;
+        researchSelect.value = s.research_depth;
       });
   }
 
@@ -1241,6 +1254,10 @@
 
   modelApplyBtn.addEventListener('click', () => {
     fetch(`/model/${encodeURIComponent(modelInput.value)}`, {method: 'POST'});
+  });
+
+  researchSelect.addEventListener('change', () => {
+    fetch('/research/' + researchSelect.value, {method: 'POST'});
   });
 
   // The box shows what the hub says, not what was clicked: the hub refuses

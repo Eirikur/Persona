@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from persona_schemas import (
     DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES, PROVIDER_NAMES,
+    REPLY_WAIT, REPLY_WAIT_DEEP, RESEARCH_DEEP_PHRASES, RESEARCH_PRESETS,
     SPEECH_EVENT_TYPES, Persona, VoiceProfile, clean_setup_name, load, save,
     save_setup,
 )
@@ -248,6 +249,7 @@ last_stop       = 0.0   # when a stop word last silenced a persona
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
 MUTED          = False     # True = ignore voice input; typed input still goes through
 MEM0_ON        = False     # True = mem0 picks memories for each prompt (Settings tab box)
+RESEARCH_DEPTH = "auto"    # research depth from the Settings tab; "auto" = the persona chooses
 shutdown_timer = None      # pending threading.Timer, or None if no shutdown is queued
 
 
@@ -457,25 +459,51 @@ async def events():
 
 # ─── LLM & Speech Clients ─────────────────────────────────────────────────────
 
-def llm(persona: Persona, system_prompt: str, messages: list[dict]) -> str:
+def llm(persona: Persona, system_prompt: str, messages: list[dict], research_depth: str = "auto") -> str:
     """
     Send a prompt to the LLM service and return the response string.
     messages is the conversation so far, ending with the newest input
     (see persona_memory.py); the system prompt goes separately.
+
+    research_depth is how deep any research call in this reply goes ("auto"
+    lets the persona choose). Deep research can take minutes, so the hub
+    then waits REPLY_WAIT_DEEP for the reply instead of REPLY_WAIT.
     """
     if LOG_PROMPTS:
         print(persona_memory.prompt_text(display_name(persona.name), system_prompt, messages))
 
-    r = httpx.post(f"{LLM_URL}/v1/chat/completions", timeout=60.0, json={
-        "provider":      persona.provider,
-        "model":         persona.model,
-        "system_prompt": system_prompt,
-        "messages":      messages,
-        "tools":         persona.tools,
-        "persona":       display_name(persona.name),
+    wait = REPLY_WAIT
+    if research_depth in ("deep", "deepest"):
+        wait = REPLY_WAIT_DEEP
+
+    r = httpx.post(f"{LLM_URL}/v1/chat/completions", timeout=wait, json={
+        "provider":       persona.provider,
+        "model":          persona.model,
+        "system_prompt":  system_prompt,
+        "messages":       messages,
+        "tools":          persona.tools,
+        "persona":        display_name(persona.name),
+        "research_depth": research_depth,
     })
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
+
+
+def research_depth_for(text: str) -> str:
+    """
+    The research depth for one input: the Settings tab's choice, raised to
+    "deep" if the input says one of RESEARCH_DEEP_PHRASES ("dig deep").
+    A spoken phrase never lowers a deeper Settings choice.
+    """
+    asked_for_deep = False
+    for phrase in RESEARCH_DEEP_PHRASES:
+        if phrase in text.lower():
+            asked_for_deep = True
+
+    if asked_for_deep and RESEARCH_DEPTH not in ("deep", "deepest"):
+        return "deep"
+
+    return RESEARCH_DEPTH
 
 
 def speak(response_text: str, voice_prompt: str) -> None:
@@ -996,6 +1024,7 @@ def get_state():
         "mode":             MODE,
         "muted":            MUTED,
         "mem0":             MEM0_ON,
+        "research_depth":   RESEARCH_DEPTH,
         "persona":          state.active_persona,
         "provider":         persona.provider,
         "model":            persona.model,
@@ -1067,6 +1096,25 @@ def set_mem0(setting: str):
     print(f"mem0 → {setting}")
     emit("log", "mem0 " + setting)
     return {"mem0": MEM0_ON}
+
+
+@app.post("/research/{depth}")
+def set_research_depth(depth: str):
+    """
+    Set how deep the personas' research goes, from the Settings tab:
+    "auto" (each persona chooses, quick or normal), or one of the depths in
+    RESEARCH_PRESETS for every research call until changed. Back to "auto"
+    at every hub start.
+    """
+    global RESEARCH_DEPTH
+
+    if depth != "auto" and depth not in RESEARCH_PRESETS:
+        raise HTTPException(status_code=400, detail="unknown research depth: " + depth)
+
+    RESEARCH_DEPTH = depth
+    print(f"research depth → {depth}")
+    emit("log", "research depth " + depth)
+    return {"research_depth": RESEARCH_DEPTH}
 
 
 @app.post("/mode/{mode}")
@@ -1454,9 +1502,13 @@ def converse(req: ThinkRequest):
             memories      = persona_memory.mem0_search(req.text)
             system_prompt = system_prompt + persona_memory.memories_block(memories)
 
+        depth = research_depth_for(req.text)
+        if depth != "auto":
+            print(f"[{pname}] research depth for this reply: {depth}")
+
         # Time LLM inference
         llm_start = time.time()
-        response = llm(persona, system_prompt, messages)
+        response = llm(persona, system_prompt, messages, depth)
         llm_duration = time.time() - llm_start
 
         persona_memory.remember_exchange(pname, req.text, response)

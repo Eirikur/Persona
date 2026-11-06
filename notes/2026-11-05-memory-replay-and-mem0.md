@@ -70,7 +70,14 @@ unchanged.
   doesn't hear what the other personas said.
 - With mem0 on, a broadcast to N personas runs N mem0 searches and N
   saves of the same input.
-- No way to clear replay without restarting the hub. A "forget" command
+- No way to clear replay without restarting the hub.
+- A hub restart brings back only Echo, so a question to Sal right after a
+  restart gets silence: no answer and no message. Idea: when the input
+  starts with the wake word of a persona who isn't in the room, say so
+  ("Sal isn't in the room") instead of dropping it.
+- persona_llm.py's prints are block-buffered like the hub's were, so its
+  lines ("research at depth ...", "out of tool rounds ...") reach llm.log
+  late. Same one-line fix as the hub (line-buffered stdout). A "forget" command
   would be easy to add.
 
 ## Next (owner's plan)
