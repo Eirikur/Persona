@@ -32,11 +32,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from persona_schemas import (
-    DEFAULT_MODELS, PRESET_VOICES, PROVIDER_NAMES, SPEECH_EVENT_TYPES, Persona,
-    VoiceProfile, clean_setup_name, load, save, save_setup,
+    DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES, PROVIDER_NAMES,
+    SPEECH_EVENT_TYPES, Persona, VoiceProfile, clean_setup_name, load, save,
+    save_setup,
 )
 from persona_scripts import SCRIPTS, script_output
 import persona_data_window
+import persona_memory
 from persona_model_lists import announcement, load_list, new_models, save_list
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
@@ -443,13 +445,20 @@ async def events():
 
 # ─── LLM & Speech Clients ─────────────────────────────────────────────────────
 
-def llm(persona: Persona, text: str) -> str:
-    """Send text to the LLM service and return the response string."""
+def llm(persona: Persona, system_prompt: str, messages: list[dict]) -> str:
+    """
+    Send a prompt to the LLM service and return the response string.
+    messages is the conversation so far, ending with the newest input
+    (see persona_memory.py); the system prompt goes separately.
+    """
+    if LOG_PROMPTS:
+        print(persona_memory.prompt_text(display_name(persona.name), system_prompt, messages))
+
     r = httpx.post(f"{LLM_URL}/v1/chat/completions", timeout=60.0, json={
         "provider":      persona.provider,
         "model":         persona.model,
-        "system_prompt": persona.system_prompt,
-        "messages":      [{"role": "user", "content": text}],
+        "system_prompt": system_prompt,
+        "messages":      messages,
         "tools":         persona.tools,
         "persona":       display_name(persona.name),
     })
@@ -1021,7 +1030,8 @@ def logs_recent():
 def think(req: ThinkRequest):
     """Send text directly to the active persona's LLM. No dispatch, no speech."""
     persona = state.personas[state.active_persona]
-    return {"text": llm(persona, req.text)}
+    messages = [{"role": "user", "content": req.text}]
+    return {"text": llm(persona, persona.system_prompt, messages)}
 
 
 @app.post("/mode/{mode}")
@@ -1396,10 +1406,16 @@ def converse(req: ThinkRequest):
 
         emit("inference", "")
 
+        # The persona hears its earlier exchanges again, then the new input.
+        messages = persona_memory.messages_for(pname, req.text)
+        print(f"[{pname}] replaying {len(messages) - 1} earlier messages")
+
         # Time LLM inference
         llm_start = time.time()
-        response = llm(persona, req.text)
+        response = llm(persona, persona.system_prompt, messages)
         llm_duration = time.time() - llm_start
+
+        persona_memory.remember_exchange(pname, req.text, response)
 
         if response:
             print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")

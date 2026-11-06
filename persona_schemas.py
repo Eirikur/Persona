@@ -96,6 +96,19 @@ RESEARCH_ALLOWED_DEPTHS = ("quick", "normal")
 RESEARCH_TIMEOUT = 50   # seconds; the hub gives up on a whole reply after 60
 
 
+# ─── Memory ───────────────────────────────────────────────────────────────────
+
+# Replay: each persona gets its last few exchanges with the owner sent along
+# with every new message (see persona_memory.py). One exchange is the
+# owner's message plus the persona's reply. More means a longer memory but
+# a bigger, slower, costlier prompt on every turn.
+REPLAY_EXCHANGES = 10
+
+# Write the whole prompt (system prompt, replayed turns, new message) to the
+# hub log on every LLM call, so it can be read in the Logs tab.
+LOG_PROMPTS = True
+
+
 # ─── Log Sources ──────────────────────────────────────────────────────────────
 
 # The service logs the Logs tab follows: source name shown in the tab, mapped
