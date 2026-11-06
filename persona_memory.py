@@ -37,7 +37,7 @@ import httpx
 
 from persona_schemas import (
     MEM0_ADD_TIMEOUT, MEM0_SEARCH_TIMEOUT, MEM0_TOP_K, MEM0_URL, MEM0_USER_ID,
-    REPLAY_EXCHANGES,
+    PROMPT_MARK, REPLAY_EXCHANGES,
 )
 
 
@@ -121,24 +121,28 @@ def mem0_search(text: str) -> list[str]:
         "top_k":   MEM0_TOP_K,
     }
 
-    started = time.time()
+    started  = time.time()
+    memories = []
+    lines    = []
 
     try:
         answer = httpx.post(MEM0_URL + "/v3/memories/search/", json=request,
                             headers=mem0_headers(), timeout=MEM0_SEARCH_TIMEOUT)
         answer.raise_for_status()
-        results = answer.json()["results"]
+
+        for result in answer.json()["results"]:
+            memories.append(result["memory"])
+            lines.append(PROMPT_MARK + str(result.get("score")) + "  " + result["memory"])
+
     except Exception as problem:
         print(f"mem0 search failed, no memories this turn: {type(problem).__name__} {problem}")
         return []
 
     seconds = time.time() - started
-    print(f"mem0 search: {len(results)} memories in {seconds:.2f}s")
+    print(f"mem0 search: {len(memories)} memories in {seconds:.2f}s")
 
-    memories = []
-    for result in results:
-        print(f"  {result['score']:.3f}  {result['memory']}")
-        memories.append(result["memory"])
+    for line in lines:
+        print(line)
 
     return memories
 
@@ -192,14 +196,19 @@ def mem0_save(text: str, reply: str) -> None:
 def prompt_text(persona_name: str, system_prompt: str, messages: list[dict]) -> str:
     """
     The whole prompt as plain text, for the hub log: one labeled block per
-    message, in the order the LLM receives them.
+    message, in the order the LLM receives them. Every line starts with
+    PROMPT_MARK, so the Logs tab never mistakes what was said for an error.
     """
-    lines = ["── prompt for " + persona_name + " ──", "[system]", system_prompt]
+    text = "── prompt for " + persona_name + " ──\n"
+    text = text + "[system]\n" + system_prompt + "\n"
 
     for message in messages:
-        lines.append("[" + message["role"] + "]")
-        lines.append(message["content"])
+        text = text + "[" + message["role"] + "]\n" + message["content"] + "\n"
 
-    lines.append("── end of prompt ──")
+    text = text + "── end of prompt ──"
 
-    return "\n".join(lines)
+    marked = []
+    for line in text.split("\n"):
+        marked.append(PROMPT_MARK + line)
+
+    return "\n".join(marked)

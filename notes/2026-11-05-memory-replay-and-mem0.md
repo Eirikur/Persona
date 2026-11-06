@@ -51,6 +51,12 @@ unchanged.
   Reykjavik and plays the cello". It stored nothing for "just say ok" or
   for a question about something it already knew.
 - All test memories were deleted from the mem0 account afterwards.
+- The motivating case works: "Sal, research who won the 2025 Nobel Prize
+  in Literature" (Perplexity, 2.7 s), then "What country is that writer
+  from?" was answered correctly from replay.
+- Prompt lines and mem0 hit lines in the log start with PROMPT_MARK
+  ("│ "), which is in ERROR_IGNORE_WORDS, so a replayed headline saying
+  "killed" doesn't turn the Logs tab red.
 
 ## Known limits
 
@@ -62,6 +68,8 @@ unchanged.
   intact).
 - **Multi-persona:** each persona replays only its own exchanges. It
   doesn't hear what the other personas said.
+- With mem0 on, a broadcast to N personas runs N mem0 searches and N
+  saves of the same input.
 - No way to clear replay without restarting the hub. A "forget" command
   would be easy to add.
 

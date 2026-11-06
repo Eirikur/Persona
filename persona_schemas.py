@@ -153,6 +153,12 @@ JOURNAL_UNITS  = "persona-*"
 LOG_NOISE_WORDS = ("mic_level", "recording_start", "recording_stop", "WriteCMD")
 
 
+# Every line of a prompt written to the hub log starts with this mark (see
+# persona_memory.py). Replayed replies repeat on every turn, and a news
+# headline saying "killed" must not light the Logs tab red each time.
+PROMPT_MARK = "│ "
+
+
 # ─── Error Detection ──────────────────────────────────────────────────────────
 
 # A log line or trace entry containing any of these is shown as an error
@@ -167,6 +173,7 @@ ERROR_WORDS = (
 ERROR_IGNORE_WORDS = (
     "timeout graceful shutdown exceeded",   # uvicorn, every time the hub stops with the page open
     "Frame latency is negative",            # Chromium rendering noise from the chat window
+    PROMPT_MARK,                            # a line of a logged prompt: what was said, not what went wrong
 )
 
 # Trace event types that carry what people said. Their text is never checked
