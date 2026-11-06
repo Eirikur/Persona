@@ -182,8 +182,19 @@ async def chat(req: ChatRequest):
         for call in message.tool_calls:
             messages.append(run_tool_call(call, req.persona, question, calls_made))
 
-    # Out of tool rounds: the last answer is whatever the model said alongside
-    # its final tool request, often nothing.
+    # Out of tool rounds. Every tool result is in messages by now, so ask one
+    # last time with tool calls switched off (tool_choice "none"): the model
+    # has to answer with what it found, even when its sources disagree.
+    # Without this, the reply is whatever the model said alongside its last
+    # tool request, which is usually nothing, and the persona stays silent.
+    print(f"out of tool rounds after {len(calls_made)} tool calls; asking for an answer with tools off")
+
+    kwargs = {"model": model, "messages": messages}
+    if tool_schemas:
+        kwargs["tools"]       = tool_schemas
+        kwargs["tool_choice"] = "none"
+    response = await client.chat.completions.create(**kwargs)
+
     save_calls(calls_made, response.choices[0].message.content or "")
     return response.model_dump()
 
