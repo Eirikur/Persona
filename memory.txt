@@ -1,0 +1,28 @@
+I need a memory system for Persona.  Sal's perplexity tool is now my
+preferred ofrm of internet research.  I can't do a follow-up query
+because Sal immediately forgets the first query. This is the
+re-pasting context trap. I've done a number of deep research
+dives. There are a lot of solutions offered but it's hard to identify
+the best ones for long-term value. My needs are pretty simple
+here. Just get past the need to preserve context in the present
+conversation. That would be a lot.  So. My idea is to do a branch of
+Persona that adopts mem0 using the free tier of their API. It's about
+a one line addition to the Persona code, I think. I do like the LLM
+deciding what to remember. I was going to use my old manual/bespoke
+parser tricks, but there's no reason to.  Here's the mem0 example
+link: https://docs.mem0.ai/cookbooks/essentials/building-ai-companion
+-- I have added my mem0 API key to the .env file.  Studying this
+example, I notice that it offers a second option, which is to use this
+mem0 example as a model, but skip the mem0 classifier/what-to-remember
+step and simply always play the previous turns of the present
+conversation in as the only memory. That would solve my present pain
+point and provide a base level that could be improved, with no use of
+the mem0 API! I would like to build both, basically the no-API version
+with a config. option to use the API or not. We have that nice
+settings page to control it. Here's a link to the mem0, "companion"
+example that seems very simple to me. The stuff that I don't know is
+the exact syntax that is expected in the prompts and what everything
+looks like in plain text, so I'd really like to have a new window that
+shows the conversation including the prompts. I assume we're using the
+structured output from Perplexity. So, I don't know what to call this
+window, maybe "Conversation Trace."

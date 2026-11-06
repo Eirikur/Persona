@@ -82,6 +82,14 @@ unchanged.
 
 ## Next (owner's plan)
 
+- **INFERENCE breathing tweak** (persona_chat.html only, reload the page):
+  breathe by color, dim to white while thinking and dim to accent orange
+  (#b8956a) during a tool call. Today it fades opacity (1 to 0.35) and turns
+  orange on the first `tool_call` event, then stays orange until
+  `speak_done`. Handle the hub's existing `tool_result` event to go back
+  to white between tool calls, so a deep research turn shows orange only
+  while Perplexity is working. Local vs offsite tools: not now.
+
 - **Conversation Trace window**: show each call's exact prompt, mem0
   search request and results, mem0 add request and event id, and the
   reply. Model it on the data window (persona_data_window.py). Note that
