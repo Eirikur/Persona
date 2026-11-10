@@ -20,6 +20,7 @@ the active habitat (persona group), or a broadcast to all loaded personas.
 
 import asyncio
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -35,7 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from persona_schemas import (
-    DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES, PROVIDER_NAMES,
+    DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES, PROVIDER_NAMES, QUIET_REQUESTS,
     REPLY_WAIT, REPLY_WAIT_DEEP, RESEARCH_DEEP_PHRASES, RESEARCH_PRESETS,
     SPEECH_EVENT_TYPES, Persona, VoiceProfile, clean_setup_name, load, save,
     save_setup,
@@ -53,6 +54,24 @@ load_dotenv()   # API keys from .env (mem0's, for persona_memory.py)
 # shows what happened when it happened -- including lines printed later by
 # background threads, like mem0's saves.
 sys.stdout.reconfigure(line_buffering=True)
+
+
+class QuietRequests(logging.Filter):
+    """Keep the web server from logging the requests in QUIET_REQUESTS."""
+
+    def filter(self, record) -> bool:
+        line = record.getMessage()
+
+        for request in QUIET_REQUESTS:
+            if request in line:
+                return False
+
+        return True
+
+
+# uvicorn writes one "access" line per request; this drops the noisy ones.
+logging.getLogger("uvicorn.access").addFilter(QuietRequests())
+
 from persona_model_lists import announcement, load_list, new_models, save_list
 from persona_prices import changed_prices, load_prices, price_change_text, save_prices
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing

@@ -43,6 +43,17 @@ done
 
 sleep 1
 
+# Empty any log over 10 MB. Emacs asks to open bigger files "literally",
+# which shows curly quotes and other non-ASCII text as raw bytes. The
+# services write with systemd's append:, so emptying a log is safe even
+# for one still running (the LED ring has no port, so it isn't stopped).
+for log in "$DIR"/logs/*.log; do
+    if [ -n "$(find "$log" -size +10M)" ]; then
+        echo "Emptying $(basename "$log"): it was over 10 MB"
+        truncate -s 0 "$log"
+    fi
+done
+
 # Put the chosen setup in place now that the hub is stopped
 if [ -n "$SETUP" ]; then
     cp "$CONFIG_DIR/state.json" "$CONFIG_DIR/state-before-setup.json" 2>/dev/null

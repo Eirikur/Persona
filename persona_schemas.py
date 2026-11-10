@@ -204,6 +204,15 @@ JOURNAL_UNITS  = "persona-*"
 # posts, recording start/stop, LED ring commands) and is not shown.
 LOG_NOISE_WORDS = ("mic_level", "recording_start", "recording_stop", "WriteCMD")
 
+# Requests to the hub so frequent that they are not written to hub.log at
+# all. The mic level arrives several times a second (it was 95% of a
+# 104 MB hub.log); the chat page polls /state. Matched against the web
+# server's access line, e.g.  "POST /mic_level/0.03 HTTP/1.1" 200 OK
+QUIET_REQUESTS = (
+    "POST /mic_level/",
+    "GET /state HTTP",
+)
+
 
 # Every line of a prompt written to the hub log starts with this mark (see
 # persona_memory.py). Replayed replies repeat on every turn, and a news

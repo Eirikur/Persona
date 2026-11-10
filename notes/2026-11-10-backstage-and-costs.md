@@ -61,8 +61,10 @@ Leave LOG_PROMPTS on until Backstage is proven.
   (fake an old price in prices/cerebras.json, restart the hub, listen).
 - No real Sal turn through the hub checked yet: all tests went straight
   to the LLM service with curl.
-- hub.log is 104 MB, which makes Emacs open it "literally" and show
-  curly quotes as raw bytes. Rotation not decided.
+- hub.log: solved. It was 104 MB, 95% "POST /mic_level" access lines,
+  which made Emacs open it "literally" (curly quotes as raw bytes). The
+  hub no longer logs QUIET_REQUESTS (persona_schemas.py), and
+  persona_start.sh empties any log over 10 MB at a full start.
 
 Full turn text is kept in hub memory only (lost on restart); the numbers
 are permanent. Owner agreed to this change from the first idea (a turns

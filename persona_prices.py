@@ -82,8 +82,17 @@ def changed_prices(kept: dict, current: dict) -> list[str]:
 
 
 def per_million(price: float) -> str:
-    """A per-token price as dollars per million tokens, e.g. "$0.99"."""
-    return "$" + format(price * 1000000, ".2f")
+    """
+    A per-token price as dollars per million tokens, e.g. "$0.99". Prices
+    under ten cents get four decimals ("$0.0125"), or a small change would
+    read as "$0.01 to $0.01".
+    """
+    dollars = price * 1000000
+
+    if dollars < 0.10:
+        return "$" + format(dollars, ".4f")
+
+    return "$" + format(dollars, ".2f")
 
 
 def price_change_text(provider_name: str, model: str, old: dict, new: dict) -> str:
