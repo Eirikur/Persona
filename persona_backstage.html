@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Persona Backstage</title>
+<style>
+  /* ─── Fonts and Colors (same as persona_data.html) ──────────────────────── */
+
+  @font-face {
+    font-family: 'Lucida Casual';
+    src: url('fonts/lucida-casual.ttf') format('truetype');
+    font-weight: 400; font-style: normal;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #1E2B35;
+    --surface:     #2A3C48;
+    --border:      #304454;
+    --text:        #C4CDD5;
+    --text-result: #D0D8DF;
+    --text-muted:  #607080;
+    --text-info:   #8FA0AE;
+    --accent:      #b8956a;
+    --font-ui:     'Lucida Casual', 'Lucida Sans', sans-serif;
+    --font-data:   'DejaVu Sans Mono', monospace;
+    --radius:      10px;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+
+  /* ─── Layout ───────────────────────────────────────────────────────────── */
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 12px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  #turns {
+    padding: 16px 20px;
+  }
+
+  #empty {
+    color: var(--text-muted);
+  }
+
+
+  /* ─── One Turn ─────────────────────────────────────────────────────────── */
+
+  details.turn {
+    margin-bottom: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  summary {
+    padding: 8px 14px;
+    cursor: pointer;
+    color: var(--text-info);
+  }
+
+  summary .persona {
+    color: var(--accent);
+  }
+
+  .steps {
+    padding: 0 14px 10px 14px;
+  }
+
+
+  /* ─── One Step Inside a Turn ───────────────────────────────────────────── */
+
+  details.step {
+    margin-bottom: 6px;
+    background: var(--bg);
+    border-radius: var(--radius);
+  }
+
+  details.step > summary {
+    padding: 4px 12px;
+    font-size: 13px;
+  }
+
+  /* What the persona actually said stands out from the machinery around it. */
+  details.step.reply > summary {
+    color: var(--accent);
+  }
+
+  details.step.tokens > summary,
+  details.step.reasoning > summary {
+    color: var(--text-muted);
+  }
+
+  pre {
+    padding: 0 12px 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--font-data);
+    font-size: 14px;
+    color: var(--text-result);
+  }
+</style>
+</head>
+<body>
+
+<header>PERSONA BACKSTAGE</header>
+
+<div id="turns">
+  <p id="empty">No turns yet. Each reply from a persona appears here, with everything behind it.</p>
+</div>
+
+<script>
+  // Shows everything behind each reply, newest on top: the prompt the model
+  // was sent, its reasoning, its tool calls and their results, the reply,
+  // and the tokens and cost. The hub keeps the last 20 turns (see
+  // persona_backstage.py); a short "turn" notice arrives over the event
+  // stream and the full turn is fetched from the hub.
+  //
+  // Turns hold outside text (web pages, news feeds), so text is only ever
+  // set with textContent, never as HTML.
+
+  const turnsEl = document.getElementById('turns');
+  const emptyEl = document.getElementById('empty');
+
+  // Steps of these kinds start folded: long, and rarely the point.
+  // The kinds are made by step() in persona_llm.py.
+  const FOLDED_KINDS = ['system', 'history', 'reasoning', 'tool_result'];
+
+
+  // ─── Showing Turns ──────────────────────────────────────────────────────
+
+  // The turn's token counts, added up over all its rounds.
+  function totalTokens(turn) {
+    const total = {in: 0, out: 0, reasoning: 0};
+
+    for (const step of turn.steps) {
+      if (step.kind === 'tokens') {
+        total.in        += step.counts.in;
+        total.out       += step.counts.out;
+        total.reasoning += step.counts.reasoning;
+      }
+    }
+
+    return total;
+  }
+
+
+  // A turn's cost for showing, e.g. "$0.0014", or "cost unknown".
+  function costText(cost) {
+    if (cost === null || cost === undefined) return 'cost unknown';
+    return '$' + cost.toFixed(4);
+  }
+
+
+  // Build the element for one step: a heading, and its text folded under it.
+  function stepElement(step) {
+    const details = document.createElement('details');
+    details.className = 'step ' + step.kind;
+    details.open = !FOLDED_KINDS.includes(step.kind);
+
+    const summary = document.createElement('summary');
+    summary.textContent = step.title;
+
+    // Models often start a reply with blank lines; they only waste space.
+    const text = document.createElement('pre');
+    text.textContent = step.text.trim() || '(empty)';
+
+    details.appendChild(summary);
+    details.appendChild(text);
+    return details;
+  }
+
+
+  // Build the element for one turn. Its heading says who, which model,
+  // how many tokens, and what it cost.
+  function turnElement(turn) {
+    const details = document.createElement('details');
+    details.className  = 'turn';
+    details.dataset.id = turn.id;
+
+    const total = totalTokens(turn);
+
+    const personaEl = document.createElement('span');
+    personaEl.className   = 'persona';
+    personaEl.textContent = turn.persona;
+
+    const summary = document.createElement('summary');
+    summary.appendChild(document.createTextNode(turn.time + '  '));
+    summary.appendChild(personaEl);
+    summary.appendChild(document.createTextNode(
+      '  ' + turn.model
+      + '  ·  ' + total.in + ' in, ' + total.out + ' out (' + total.reasoning + ' reasoning)'
+      + '  ·  model ' + costText(turn.cost)));
+
+    const steps = document.createElement('div');
+    steps.className = 'steps';
+
+    for (const step of turn.steps) {
+      steps.appendChild(stepElement(step));
+    }
+
+    details.appendChild(summary);
+    details.appendChild(steps);
+    return details;
+  }
+
+
+  // Put a new turn on top, open it, and close the one that was on top.
+  function addNewest(turn) {
+    emptyEl.style.display = 'none';
+
+    const previous = turnsEl.querySelector(':scope > details');
+    if (previous) previous.open = false;
+
+    const element = turnElement(turn);
+    element.open = true;
+    turnsEl.insertBefore(element, turnsEl.firstChild);
+  }
+
+
+  // ─── Talking to the Hub ─────────────────────────────────────────────────
+
+  // Replace everything shown with the hub's current list. Run on every
+  // (re)connect, so nothing is missed or shown twice across a hub restart.
+  async function loadAll() {
+    const response = await fetch('/backstage/recent');
+    const turns    = await response.json();
+
+    for (const old of turnsEl.querySelectorAll(':scope > details')) {
+      old.remove();
+    }
+    emptyEl.style.display = turns.length ? 'none' : '';
+
+    // The hub sends newest first; add oldest first so the newest ends on top.
+    for (const turn of turns.reverse()) {
+      addNewest(turn);
+    }
+  }
+
+
+  // Fetch one turn the hub just announced and put it on top.
+  async function loadOne(id) {
+    if (turnsEl.querySelector('details[data-id="' + id + '"]')) return;
+
+    const response = await fetch('/backstage/' + id);
+    if (!response.ok) return;
+
+    addNewest(await response.json());
+  }
+
+
+  // Listen for "turn" notices; everything else on the stream is for the
+  // chat window. Closing this window never shuts Persona down.
+  const events = new EventSource('/events');
+
+  events.onopen = () => {
+    loadAll();
+  };
+
+  events.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'turn') {
+      loadOne(data.id);
+    }
+  };
+</script>
+
+</body>
+</html>

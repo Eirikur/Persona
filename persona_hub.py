@@ -218,6 +218,18 @@ DATA_PHRASES = (
     "show me the data",
 )
 
+# Phrases that open (or bring forward) the Backstage window, which shows
+# everything behind each reply. Matched like DATA_PHRASES. Whisper may
+# write the word as one or two, so both are here.
+BACKSTAGE_PHRASES = (
+    "show backstage",
+    "show back stage",
+    "show the backstage",
+    "show the back stage",
+    "show me backstage",
+    "show me back stage",
+)
+
 # Phrases that route input to all loaded personas simultaneously.
 BROADCAST_PHRASES = (
     "hi gang",    "hello gang",    "hey gang",
@@ -398,9 +410,11 @@ def chat_window_focused() -> bool:
         ).decode().strip()
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
-    # The data window counts too: raising the chat window over it while the
-    # owner reads it would hide what they asked to see.
-    return name == CHAT_WINDOW_TITLE or name == persona_data_window.DATA_WINDOW_TITLE
+    # The data and Backstage windows count too: raising the chat window over
+    # one while the owner reads it would hide what they asked to see.
+    side_windows = (persona_data_window.DATA_WINDOW_TITLE, persona_backstage.BACKSTAGE_WINDOW_TITLE)
+
+    return name == CHAT_WINDOW_TITLE or name in side_windows
 
 
 def raise_chat_window() -> None:
@@ -1022,6 +1036,14 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
             print("data window: show")
             emit("log", "showing the data window")
             threading.Thread(target=persona_data_window.show_window,
+                             args=(CHAT_WINDOW_TITLE,), daemon=True).start()
+            return [], True
+
+    for phrase in BACKSTAGE_PHRASES:
+        if " " + phrase + " " in " " + spoken_words + " ":
+            print("backstage window: show")
+            emit("log", "showing the Backstage window")
+            threading.Thread(target=persona_backstage.show_window,
                              args=(CHAT_WINDOW_TITLE,), daemon=True).start()
             return [], True
 

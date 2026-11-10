@@ -15,11 +15,16 @@ import threading
 import time
 
 from persona_prices import cost_text
+from persona_side_window import show_window as show_side_window
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 TURNS_KEPT = 20   # oldest turns are forgotten beyond this many
+
+BACKSTAGE_WINDOW_TITLE = "Persona Backstage"   # must match <title> in persona_backstage.html
+BACKSTAGE_WINDOW_WIDTH = 1000
+BACKSTAGE_WINDOW_URL   = "http://localhost:8400/ui/persona_backstage.html"
 
 
 # ─── Stored Turns ─────────────────────────────────────────────────────────────
@@ -91,3 +96,10 @@ def notice_text(turn: dict) -> str:
     return (turn["persona"] + " via " + turn["model"] + ": "
             + str(total["in"]) + " tokens in, " + str(total["out"]) + " out, model "
             + cost_text(turn["cost"]))
+
+
+# ─── Opening the Window ───────────────────────────────────────────────────────
+
+def show_window(chat_title: str) -> None:
+    """Bring the Backstage window to the front, opening it beside the chat window first if it isn't open."""
+    show_side_window(BACKSTAGE_WINDOW_TITLE, BACKSTAGE_WINDOW_URL, BACKSTAGE_WINDOW_WIDTH, chat_title)
