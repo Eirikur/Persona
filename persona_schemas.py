@@ -33,6 +33,21 @@ STATE_FILE = Path.home() / ".config" / "persona" / "state.json"
 # (see persona_model_lists.py).
 MODEL_LIST_DIR = Path.home() / ".local" / "share" / "persona" / "model_lists"
 
+# One JSON file per provider: what each of its models cost at the last
+# startup check, in dollars per token (see persona_prices.py).
+PRICE_DIR = Path.home() / ".local" / "share" / "persona" / "prices"
+
+# Where each provider publishes its prices. Both answer in the same shape:
+# {"data": [{"id": ..., "pricing": {"prompt": ..., "completion": ...}}]}.
+# Cerebras's ordinary model list has no prices; its public one does.
+PRICE_URLS = {
+    "cerebras":   "https://api.cerebras.ai/public/v1/models",
+    "openrouter": "https://openrouter.ai/api/v1/models",
+}
+
+# Providers that run on this machine: every turn costs nothing.
+FREE_PROVIDERS = ("ollama", "echo")
+
 
 # ─── Default Models ───────────────────────────────────────────────────────────
 

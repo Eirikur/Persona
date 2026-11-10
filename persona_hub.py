@@ -54,6 +54,7 @@ load_dotenv()   # API keys from .env (mem0's, for persona_memory.py)
 # background threads, like mem0's saves.
 sys.stdout.reconfigure(line_buffering=True)
 from persona_model_lists import announcement, load_list, new_models, save_list
+from persona_prices import changed_prices, load_prices, price_change_text, save_prices
 from persona_log_tailer import looks_like_error, recent_lines, start_tailing
 
 
@@ -656,6 +657,7 @@ def check_providers() -> None:
         return
 
     providers_in_use = set(persona.provider for persona in state.personas.values())
+    models_in_use    = set(effective_model(persona) for persona in state.personas.values())
     spoken = []
 
     for answer in answers:
@@ -663,6 +665,8 @@ def check_providers() -> None:
         status   = answer["status"]
         models   = answer["models"]
         name     = PROVIDER_NAMES.get(provider, provider)
+
+        spoken.extend(check_prices(provider, name, answer.get("prices", {}), models_in_use))
 
         if status != "ok":
             text    = "provider " + name + ": " + status + " -- " + answer["reason"]
@@ -692,6 +696,42 @@ def check_providers() -> None:
 
     if spoken:
         say_summary(" ".join(spoken))
+
+
+def check_prices(provider: str, name: str, prices: dict, models_in_use: set) -> list[str]:
+    """
+    Keep one provider's fresh prices (persona_prices.py) and report any
+    that changed since last time. Every change goes to TRACE and the hub
+    log; only changes to models a persona uses are returned, for System to
+    say out loud. OpenRouter alone lists hundreds of models, and most
+    changes there don't matter to us.
+
+    Empty prices mean none were published or the fetch failed: the kept
+    ones stay. The first prices for a provider are only kept, not reported.
+    """
+    if not prices:
+        return []
+
+    kept = load_prices(provider)
+    save_prices(provider, prices)
+
+    if kept is None:
+        text = "provider " + name + ": " + str(len(prices)) + " prices (first listing, kept for next time)"
+        print(text)
+        emit("log", text, error=False)
+        return []
+
+    spoken = []
+
+    for model in changed_prices(kept, prices):
+        text = price_change_text(name, model, kept[model], prices[model])
+        print(text)
+        emit("log", text, error=False)
+
+        if model in models_in_use:
+            spoken.append(text)
+
+    return spoken
 
 
 # ─── Held Voice Input ─────────────────────────────────────────────────────────
@@ -1028,6 +1068,7 @@ class Turn(BaseModel):
     provider: str
     model:    str
     steps:    list[dict]   # see step() in persona_llm.py
+    cost:     float | None = None   # dollars; None when the price isn't known
 
 
 @app.get("/state")
@@ -1242,7 +1283,7 @@ def data_record(record_id: int):
 def turn(report: Turn):
     """Keep a whole turn for the Backstage window. Only a one-line notice
     goes over the event stream; the window fetches the rest."""
-    kept = persona_backstage.add_turn(report.persona, report.provider, report.model, report.steps)
+    kept = persona_backstage.add_turn(report.persona, report.provider, report.model, report.steps, report.cost)
 
     emit("turn", persona_backstage.notice_text(kept), id=kept["id"], error=False)
     return {"ok": True}

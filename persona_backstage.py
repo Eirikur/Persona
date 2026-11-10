@@ -14,6 +14,8 @@ whole replayed history, far too much to push to every listening page.
 import threading
 import time
 
+from persona_prices import cost_text
+
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -27,8 +29,8 @@ turns_lock = threading.Lock()
 next_id    = 1
 
 
-def add_turn(persona: str, provider: str, model: str, steps: list[dict]) -> dict:
-    """Keep one turn, give it an id and a time, and return it."""
+def add_turn(persona: str, provider: str, model: str, steps: list[dict], cost: float | None) -> dict:
+    """Keep one turn and what it cost, give it an id and a time, and return it."""
     global next_id
 
     with turns_lock:
@@ -39,6 +41,7 @@ def add_turn(persona: str, provider: str, model: str, steps: list[dict]) -> dict
             "provider": provider,
             "model":    model,
             "steps":    steps,
+            "cost":     cost,
         }
         next_id += 1
 
@@ -86,4 +89,5 @@ def notice_text(turn: dict) -> str:
     """The one-line summary sent over the event stream (and shown in Trace)."""
     total = total_tokens(turn["steps"])
     return (turn["persona"] + " via " + turn["model"] + ": "
-            + str(total["in"]) + " tokens in, " + str(total["out"]) + " out")
+            + str(total["in"]) + " tokens in, " + str(total["out"]) + " out, "
+            + cost_text(turn["cost"]))

@@ -33,10 +33,11 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from persona_schemas import DEFAULT_MODELS, RESEARCH_ALLOWED_DEPTHS
+from persona_schemas import DEFAULT_MODELS, PRICE_URLS, RESEARCH_ALLOWED_DEPTHS
 from persona_tools import TOOLS
 from persona_tool_log import save_calls, save_turn
 from persona_backstage import total_tokens
+from persona_prices import read_price_list, turn_cost
 
 load_dotenv()
 
@@ -252,16 +253,18 @@ def answer_steps(response, round_number: int) -> list[dict]:
     return steps
 
 
-def report_turn(req: ChatRequest, model: str, steps: list[dict]) -> None:
+def report_turn(req: ChatRequest, model: str, steps: list[dict], cost: float | None) -> None:
     """
-    Send the hub the whole turn, step by step, for the Backstage window.
-    Like report_tool_result(), a failure here never blocks the reply.
+    Send the hub the whole turn, step by step, and what it cost, for the
+    Backstage window. Like report_tool_result(), a failure here never
+    blocks the reply.
     """
     turn = {
         "persona":  req.persona,
         "provider": req.provider,
         "model":    model,
         "steps":    steps,
+        "cost":     cost,
     }
 
     try:
@@ -272,16 +275,19 @@ def report_turn(req: ChatRequest, model: str, steps: list[dict]) -> None:
 
 def finish_turn(req: ChatRequest, model: str, steps: list[dict], response, calls_made: list) -> dict:
     """
-    End a turn: add the reply to the steps, save the tool calls and the
-    turn's numbers to the tool log, send the turn to Backstage, and return
-    the response in OpenAI's shape.
+    End a turn: add the reply to the steps, work out what the turn cost,
+    save the tool calls and the turn's numbers to the tool log, send the
+    turn to Backstage, and return the response in OpenAI's shape.
     """
     reply = response.choices[0].message.content or ""
     steps.append(step("reply", "Reply", reply))
 
+    tokens = total_tokens(steps)
+    cost   = turn_cost(req.provider, model, tokens)
+
     save_calls(calls_made, reply)
-    save_turn(req.persona, req.provider, model, total_tokens(steps), len(calls_made))
-    report_turn(req, model, steps)
+    save_turn(req.persona, req.provider, model, tokens, len(calls_made), cost)
+    report_turn(req, model, steps, cost)
 
     return response.model_dump()
 
@@ -446,7 +452,29 @@ async def fetch_models(provider: str) -> dict:
         answer["status"] = "error"
         answer["reason"] = type(other).__name__ + ": " + str(other)
 
+    answer["prices"] = await fetch_prices(provider)
+
     return answer
+
+
+async def fetch_prices(provider: str) -> dict:
+    """
+    This provider's prices as {model: {"in": ..., "out": ...}}, in dollars
+    per token (see persona_prices.py). Empty if it publishes none (not in
+    PRICE_URLS) or the fetch failed; the hub then keeps its old prices.
+    """
+    if provider not in PRICE_URLS:
+        return {}
+
+    try:
+        async with httpx.AsyncClient(timeout=MODEL_LIST_TIMEOUT) as client:
+            listing = await client.get(PRICE_URLS[provider])
+            listing.raise_for_status()
+            return read_price_list(listing.json())
+
+    except Exception as problem:
+        print(f"prices for {provider}: could not fetch: {type(problem).__name__} {problem}")
+        return {}
 
 
 @app.get("/provider_models")

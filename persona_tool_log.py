@@ -13,9 +13,9 @@ reply known. Kept in an SQLite file, which any SQLite tool can open
     sqlite> SELECT time, tool, arguments FROM tool_calls ORDER BY id DESC LIMIT 10;
 
 The same file has a second table, turns: one row of numbers per reply
-(tokens, rounds, cost). Tokens per day, for example:
+(tokens, rounds, cost). Tokens and dollars per day, for example:
 
-    sqlite> SELECT substr(time, 1, 10) AS day, SUM(tokens_in), SUM(tokens_out)
+    sqlite> SELECT substr(time, 1, 10) AS day, SUM(tokens_in), SUM(tokens_out), SUM(cost)
        ...> FROM turns GROUP BY day;
 """
 
@@ -98,11 +98,12 @@ def save_calls(calls: list[dict], reply: str) -> None:
         print(f"tool log: could not save {len(calls)} call(s): {err}")
 
 
-def save_turn(persona: str, provider: str, model: str, tokens: dict, tool_calls: int) -> None:
+def save_turn(persona: str, provider: str, model: str, tokens: dict, tool_calls: int, cost: float | None) -> None:
     """
     Add one row to the turns table. tokens is total_tokens() from
-    persona_backstage.py. The cost is left empty for now. A failure is
-    printed, never raised, as in save_calls().
+    persona_backstage.py; cost is turn_cost() from persona_prices.py, None
+    (stored as NULL) when the price isn't known. A failure is printed,
+    never raised, as in save_calls().
     """
     now = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -116,9 +117,9 @@ def save_turn(persona: str, provider: str, model: str, tokens: dict, tool_calls:
             connection.execute(
                 "INSERT INTO turns (time, persona, provider, model, rounds, tool_calls,"
                 " tokens_in, tokens_cached, tokens_out, tokens_reasoning, cost)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (now, persona, provider, model, tokens["rounds"], tool_calls,
-                 tokens["in"], tokens["cached"], tokens["out"], tokens["reasoning"]),
+                 tokens["in"], tokens["cached"], tokens["out"], tokens["reasoning"], cost),
             )
 
         connection.close()
