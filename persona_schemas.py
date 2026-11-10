@@ -143,6 +143,19 @@ MEM0_SEARCH_TIMEOUT = 3.0         # seconds; the reply waits for this, so keep i
 MEM0_ADD_TIMEOUT    = 30.0        # seconds; saving runs in the background
 
 
+# ─── Reply Text Filter ────────────────────────────────────────────────────────
+
+# LLMs write "curly" quotes and apostrophes (I’m, “each.”). Every reply has
+# them swapped for plain ones as it arrives (see persona_text_filter.py), so
+# logs, history, mem0 and Emacs all see ordinary ASCII quotes.
+STRAIGHT_QUOTES = (
+    ("‘", "'"),    # ‘  left single quote
+    ("’", "'"),    # ’  right single quote, the apostrophe in I’m
+    ("“", '"'),    # “  left double quote
+    ("”", '"'),    # ”  right double quote
+)
+
+
 # ─── Log Sources ──────────────────────────────────────────────────────────────
 
 # The service logs the Logs tab follows: source name shown in the tab, mapped

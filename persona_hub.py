@@ -43,6 +43,7 @@ from persona_schemas import (
 from persona_scripts import SCRIPTS, script_output
 import persona_data_window
 import persona_memory
+import persona_text_filter
 
 load_dotenv()   # API keys from .env (mem0's, for persona_memory.py)
 
@@ -461,7 +462,8 @@ async def events():
 
 def llm(persona: Persona, system_prompt: str, messages: list[dict], research_depth: str = "auto") -> str:
     """
-    Send a prompt to the LLM service and return the response string.
+    Send a prompt to the LLM service and return the response string, with
+    curly quotes straightened (see persona_text_filter.py).
     messages is the conversation so far, ending with the newest input
     (see persona_memory.py); the system prompt goes separately.
 
@@ -486,7 +488,11 @@ def llm(persona: Persona, system_prompt: str, messages: list[dict], research_dep
         "research_depth": research_depth,
     })
     r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+
+    # A model that says nothing sends no content at all; treat that as "".
+    reply = r.json()["choices"][0]["message"]["content"] or ""
+
+    return persona_text_filter.straighten_quotes(reply)
 
 
 def research_depth_for(text: str) -> str:
