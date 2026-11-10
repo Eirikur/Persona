@@ -149,10 +149,10 @@ MEM0_ADD_TIMEOUT    = 30.0        # seconds; saving runs in the background
 # them swapped for plain ones as it arrives (see persona_text_filter.py), so
 # logs, history, mem0 and Emacs all see ordinary ASCII quotes.
 STRAIGHT_QUOTES = (
-    ("‘", "'"),    # ‘  left single quote
-    ("’", "'"),    # ’  right single quote, the apostrophe in I’m
-    ("“", '"'),    # “  left double quote
-    ("”", '"'),    # ”  right double quote
+    ("\u2018", "'"),    # ‘  left single quote
+    ("\u2019", "'"),    # ’  right single quote, the apostrophe in I’m
+    ("\u201c", '"'),    # “  left double quote
+    ("\u201d", '"'),    # ”  right double quote
 )
 
 
