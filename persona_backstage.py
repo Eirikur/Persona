@@ -89,5 +89,5 @@ def notice_text(turn: dict) -> str:
     """The one-line summary sent over the event stream (and shown in Trace)."""
     total = total_tokens(turn["steps"])
     return (turn["persona"] + " via " + turn["model"] + ": "
-            + str(total["in"]) + " tokens in, " + str(total["out"]) + " out, "
+            + str(total["in"]) + " tokens in, " + str(total["out"]) + " out, model "
             + cost_text(turn["cost"]))

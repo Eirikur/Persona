@@ -41,6 +41,29 @@ d. The Backstage window: copy of the Data window's approach, folding
 
 Leave LOG_PROMPTS on until Backstage is proven.
 
+## Progress
+
+- (a) done: dabfd78. Turns at http://localhost:8400/backstage/recent.
+- (b) done: 775083a. `turns` table in ~/.local/share/persona/tool_log.db.
+- (c) done: 5bd0e6d. Prices kept in ~/.local/share/persona/prices/.
+- Next: (d), the window.
+
+## Open items
+
+- Cost is the **model only**. Perplexity research charges are not
+  included; labelled "model cost" for that reason. Check whether
+  Perplexity's response reports its cost per request (ask the owner
+  before running a paid research call to find out).
+- Cached input is priced as normal input (overestimates slightly;
+  Cerebras has cached 0 so far). OpenRouter lists an input_cache_read
+  price if this ever matters.
+- The price-change alert has only been tested in pieces, not end to end
+  (fake an old price in prices/cerebras.json, restart the hub, listen).
+- No real Sal turn through the hub checked yet: all tests went straight
+  to the LLM service with curl.
+- hub.log is 104 MB, which makes Emacs open it "literally" and show
+  curly quotes as raw bytes. Rotation not decided.
+
 Full turn text is kept in hub memory only (lost on restart); the numbers
 are permanent. Owner agreed to this change from the first idea (a turns
 table holding everything).

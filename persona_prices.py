@@ -110,6 +110,10 @@ def turn_cost(provider: str, model: str, tokens: dict) -> float | None:
     What one turn cost in dollars, from its token totals (total_tokens() in
     persona_backstage.py) and the kept prices. None if the price isn't known.
     Reasoning tokens are already counted in tokens["out"].
+
+    Only the model's own cost: a tool's charges (Perplexity research) are
+    not included. Cached input is priced as ordinary input, so a provider
+    that discounts it is slightly overestimated.
     """
     if provider in FREE_PROVIDERS:
         return 0.0

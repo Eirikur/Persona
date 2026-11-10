@@ -650,7 +650,9 @@ def check_providers() -> None:
     wait_until(lambda: answers_http(SPEECH_OUTPUT_URL + "/docs"), PROVIDER_CHECK_WAIT)
 
     try:
-        answers = httpx.get(LLM_URL + "/provider_models", timeout=60.0).json()
+        # Up to 10 s per model list and 10 s per price list, one provider
+        # after another, so allow well over a minute.
+        answers = httpx.get(LLM_URL + "/provider_models", timeout=120.0).json()
     except httpx.HTTPError as problem:
         print(f"provider check failed: {problem}")
         emit("log", "provider check failed: the LLM service didn't answer (" + type(problem).__name__ + ")", error=True)
