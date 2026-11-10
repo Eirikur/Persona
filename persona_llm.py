@@ -154,6 +154,136 @@ def report_tool_result(record: dict) -> None:
         pass  # a missing copy for the data window shouldn't block the reply
 
 
+# ─── Backstage Record ─────────────────────────────────────────────────────────
+
+# Where a model puts its thinking, if it sends any. Cerebras and OpenRouter
+# use "reasoning"; DeepSeek-style models use "reasoning_content".
+REASONING_FIELDS = ("reasoning", "reasoning_content")
+
+
+def step(kind: str, title: str, text: str) -> dict:
+    """
+    One step of a turn, shown as one folding section in the Backstage
+    window. The kind ("system", "reasoning", "tool_call", ...) decides
+    whether the section starts folded; the title is its heading line.
+    """
+    return {"kind": kind, "title": title, "text": text}
+
+
+def opening_steps(system_prompt: str, messages: list[dict]) -> list[dict]:
+    """
+    The steps for what the model is sent before it answers: the system
+    prompt (with mem0's memories, if any), the replayed history, and the
+    new input, which is the last message.
+    """
+    history = messages[:-1]
+
+    history_parts = []
+    for message in history:
+        history_parts.append("[" + message["role"] + "]\n" + message["content"])
+
+    history_title = "Replayed history: " + str(len(history)) + " messages"
+
+    steps = [
+        step("system",  "System prompt", system_prompt),
+        step("history", history_title,   "\n\n".join(history_parts)),
+    ]
+
+    if messages:
+        steps.append(step("input", "Input", messages[-1]["content"]))
+
+    return steps
+
+
+def reasoning_of(message) -> str:
+    """The model's thinking for one answer, or "" if it sent none."""
+    for field in REASONING_FIELDS:
+        value = getattr(message, field, None)
+        if value:
+            return value
+
+    return ""
+
+
+def token_counts(usage) -> dict:
+    """
+    One answer's token counts as plain numbers: tokens in (and how many of
+    those the provider had cached), tokens out (and how many of those were
+    reasoning). All zero if the provider sent no counts.
+    """
+    counts = {"in": 0, "cached": 0, "out": 0, "reasoning": 0}
+    if usage is None:
+        return counts
+
+    counts["in"]  = usage.prompt_tokens or 0
+    counts["out"] = usage.completion_tokens or 0
+
+    if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens:
+        counts["cached"] = usage.prompt_tokens_details.cached_tokens
+
+    if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
+        counts["reasoning"] = usage.completion_tokens_details.reasoning_tokens
+
+    return counts
+
+
+def answer_steps(response, round_number: int) -> list[dict]:
+    """
+    The steps for one answer from the model: its reasoning, if it sent any,
+    and its token counts. The token step also carries the counts as
+    numbers, for adding up later.
+    """
+    label  = "Round " + str(round_number)
+    steps  = []
+
+    reasoning = reasoning_of(response.choices[0].message)
+    if reasoning:
+        steps.append(step("reasoning", label + ": reasoning", reasoning))
+
+    counts = token_counts(response.usage)
+    text = (str(counts["in"]) + " in (" + str(counts["cached"]) + " cached), "
+            + str(counts["out"]) + " out (" + str(counts["reasoning"]) + " reasoning)")
+
+    tokens_step = step("tokens", label + ": tokens", text)
+    tokens_step["counts"] = counts
+    steps.append(tokens_step)
+
+    return steps
+
+
+def report_turn(req: ChatRequest, model: str, steps: list[dict]) -> None:
+    """
+    Send the hub the whole turn, step by step, for the Backstage window.
+    Like report_tool_result(), a failure here never blocks the reply.
+    """
+    turn = {
+        "persona":  req.persona,
+        "provider": req.provider,
+        "model":    model,
+        "steps":    steps,
+    }
+
+    try:
+        httpx.post(f"{HUB_URL}/turn", json=turn, timeout=1.0)
+    except Exception:
+        pass  # a missing Backstage record shouldn't block the reply
+
+
+def finish_turn(req: ChatRequest, model: str, steps: list[dict], response, calls_made: list) -> dict:
+    """
+    End a turn: add the reply to the steps, save the tool calls to the
+    tool log, send the turn to Backstage, and return the response in
+    OpenAI's shape.
+    """
+    reply = response.choices[0].message.content or ""
+    steps.append(step("reply", "Reply", reply))
+
+    save_calls(calls_made, reply)
+    report_turn(req, model, steps)
+
+    return response.model_dump()
+
+
 @app.post("/v1/chat/completions")
 async def chat(req: ChatRequest):
     """Return a completion in OpenAI's response shape, from a real provider
@@ -177,16 +307,24 @@ async def chat(req: ChatRequest):
 
     calls_made = []   # every tool call for this reply, saved to the tool log at the end
 
-    for _ in range(MAX_TOOL_ROUNDS):
+    # The whole turn, step by step, for the Backstage window. Kept apart from
+    # messages, which go back to the provider: it rejects unknown fields.
+    steps = opening_steps(req.system_prompt, req.messages)
+
+    for round_number in range(1, MAX_TOOL_ROUNDS + 1):
         kwargs = {"model": model, "messages": messages}
         if tool_schemas:
             kwargs["tools"] = tool_schemas
         response = await client.chat.completions.create(**kwargs)
 
+        steps.extend(answer_steps(response, round_number))
+
         message = response.choices[0].message
         if not message.tool_calls:
-            save_calls(calls_made, message.content or "")
-            return response.model_dump()
+            return finish_turn(req, model, steps, response, calls_made)
+
+        if message.content and message.content.strip():
+            steps.append(step("said", "Said with the tool request", message.content))
 
         # Only the standard tool-calling fields -- some providers (Cerebras)
         # reject the extra None-valued fields a full message.model_dump()
@@ -206,7 +344,14 @@ async def chat(req: ChatRequest):
         question = req.messages[-1]["content"] if req.messages else ""
 
         for call in message.tool_calls:
-            messages.append(run_tool_call(call, req.persona, question, calls_made, req.research_depth))
+            steps.append(step("tool_call", "Tool call: " + call.function.name, call.function.arguments))
+
+            tool_message = run_tool_call(call, req.persona, question, calls_made, req.research_depth)
+            messages.append(tool_message)
+
+            result_title = ("Tool result: " + call.function.name + ", "
+                            + str(len(tool_message["content"])) + " characters")
+            steps.append(step("tool_result", result_title, tool_message["content"]))
 
     # Out of tool rounds. Every tool result is in messages by now, so ask one
     # last time with tool calls switched off (tool_choice "none"): the model
@@ -221,8 +366,9 @@ async def chat(req: ChatRequest):
         kwargs["tool_choice"] = "none"
     response = await client.chat.completions.create(**kwargs)
 
-    save_calls(calls_made, response.choices[0].message.content or "")
-    return response.model_dump()
+    steps.extend(answer_steps(response, MAX_TOOL_ROUNDS + 1))
+
+    return finish_turn(req, model, steps, response, calls_made)
 
 
 # ─── Provider Check ───────────────────────────────────────────────────────────

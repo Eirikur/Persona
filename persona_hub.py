@@ -41,6 +41,7 @@ from persona_schemas import (
     save_setup,
 )
 from persona_scripts import SCRIPTS, script_output
+import persona_backstage
 import persona_data_window
 import persona_memory
 import persona_text_filter
@@ -1022,6 +1023,13 @@ class ToolResult(BaseModel):
     data:      str = ""   # the tool's full structure as JSON text, if it has one
 
 
+class Turn(BaseModel):
+    persona:  str          # display name of the persona that replied
+    provider: str
+    model:    str
+    steps:    list[dict]   # see step() in persona_llm.py
+
+
 @app.get("/state")
 def get_state():
     """Report current mode, the loaded roster, and the active persona's provider/model."""
@@ -1228,6 +1236,32 @@ def data_record(record_id: int):
         raise HTTPException(status_code=404, detail="no such tool result (forgotten, or the hub restarted)")
 
     return record
+
+
+@app.post("/turn")
+def turn(report: Turn):
+    """Keep a whole turn for the Backstage window. Only a one-line notice
+    goes over the event stream; the window fetches the rest."""
+    kept = persona_backstage.add_turn(report.persona, report.provider, report.model, report.steps)
+
+    emit("turn", persona_backstage.notice_text(kept), id=kept["id"], error=False)
+    return {"ok": True}
+
+
+@app.get("/backstage/recent")
+def backstage_recent():
+    """Every kept turn, newest first, for the Backstage window to show when it opens."""
+    return persona_backstage.recent_turns()
+
+
+@app.get("/backstage/{turn_id}")
+def backstage_turn(turn_id: int):
+    """One kept turn, fetched by the Backstage window when a notice for it arrives."""
+    kept = persona_backstage.find_turn(turn_id)
+    if kept is None:
+        raise HTTPException(status_code=404, detail="no such turn (forgotten, or the hub restarted)")
+
+    return kept
 
 
 @app.post("/playback_start")
