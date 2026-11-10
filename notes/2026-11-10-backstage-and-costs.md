@@ -61,7 +61,23 @@ Leave LOG_PROMPTS on until Backstage is proven.
   so the later one covers the other.
 - Sal spends most output tokens reasoning (133 of 156 on a one-sentence
   reply), and ~400 input tokens per round are tool descriptions.
-- Next idea: turn LOG_PROMPTS off now that Backstage shows prompts.
+- LOG_PROMPTS turned off (owner's decision); takes effect at the next
+  hub start.
+
+## Wanted later (owner, 2026-11-10)
+
+- **Record Backstage to a file.** Turns live only in the hub's memory
+  (last 20, lost on restart). Owner wants a way to save them to a file.
+  Not designed yet. Questions to settle then: every turn automatically,
+  or on request ("save backstage")? One file per turn or per day? Plain
+  text (readable in Emacs) or JSON? Turns can be large (full replay plus
+  research results), so automatic saving needs a size limit or cleanup.
+- Live update of an open Backstage window (a new turn appearing without
+  a reload) is built but was not seen working by the owner yet.
+- 2 test rows (persona "Test") are in the turns tally; owner to decide
+  whether to delete them.
+- Data and Backstage windows open in the same spot; placement undecided.
+- Perplexity cost not included; checking needs one paid research call.
 
 ## Open items
 

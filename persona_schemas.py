@@ -144,8 +144,10 @@ RESEARCH_DEEP_PHRASES = (
 REPLAY_EXCHANGES = 10
 
 # Write the whole prompt (system prompt, replayed turns, new message) to the
-# hub log on every LLM call, so it can be read in the Logs tab.
-LOG_PROMPTS = True
+# hub log on every LLM call, so it can be read in the Logs tab. Off since
+# 2026-11-10: the Backstage window ("show backstage") shows the whole prompt,
+# and more besides.
+LOG_PROMPTS = False
 
 # mem0 (hosted, free tier): when the "mem0" box on the Settings tab is ticked,
 # mem0's own LLM reads every exchange and decides what is worth keeping, and
