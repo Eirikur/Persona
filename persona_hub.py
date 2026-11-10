@@ -60,6 +60,7 @@ class QuietRequests(logging.Filter):
     """Keep the web server from logging the requests in QUIET_REQUESTS."""
 
     def filter(self, record) -> bool:
+        """False (drop the line) if it's one of QUIET_REQUESTS, else True."""
         line = record.getMessage()
 
         for request in QUIET_REQUESTS:
