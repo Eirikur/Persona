@@ -35,7 +35,8 @@ from dotenv import load_dotenv
 
 from persona_schemas import DEFAULT_MODELS, RESEARCH_ALLOWED_DEPTHS
 from persona_tools import TOOLS
-from persona_tool_log import save_calls
+from persona_tool_log import save_calls, save_turn
+from persona_backstage import total_tokens
 
 load_dotenv()
 
@@ -271,14 +272,15 @@ def report_turn(req: ChatRequest, model: str, steps: list[dict]) -> None:
 
 def finish_turn(req: ChatRequest, model: str, steps: list[dict], response, calls_made: list) -> dict:
     """
-    End a turn: add the reply to the steps, save the tool calls to the
-    tool log, send the turn to Backstage, and return the response in
-    OpenAI's shape.
+    End a turn: add the reply to the steps, save the tool calls and the
+    turn's numbers to the tool log, send the turn to Backstage, and return
+    the response in OpenAI's shape.
     """
     reply = response.choices[0].message.content or ""
     steps.append(step("reply", "Reply", reply))
 
     save_calls(calls_made, reply)
+    save_turn(req.persona, req.provider, model, total_tokens(steps), len(calls_made))
     report_turn(req, model, steps)
 
     return response.model_dump()

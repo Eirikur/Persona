@@ -65,20 +65,25 @@ def find_turn(turn_id: int) -> dict | None:
     return None
 
 
-def total_tokens(turn: dict) -> dict:
-    """The turn's token counts, added up over all its rounds."""
-    total = {"in": 0, "cached": 0, "out": 0, "reasoning": 0}
+def total_tokens(steps: list[dict]) -> dict:
+    """
+    A turn's token counts, added up over all its rounds, plus how many
+    rounds there were. Also used by persona_llm.py for the turns tally.
+    """
+    total = {"in": 0, "cached": 0, "out": 0, "reasoning": 0, "rounds": 0}
 
-    for step in turn["steps"]:
+    for step in steps:
         if step["kind"] == "tokens":
-            for name in total:
+            for name in step["counts"]:
                 total[name] += step["counts"][name]
+
+            total["rounds"] += 1
 
     return total
 
 
 def notice_text(turn: dict) -> str:
     """The one-line summary sent over the event stream (and shown in Trace)."""
-    total = total_tokens(turn)
+    total = total_tokens(turn["steps"])
     return (turn["persona"] + " via " + turn["model"] + ": "
             + str(total["in"]) + " tokens in, " + str(total["out"]) + " out")
