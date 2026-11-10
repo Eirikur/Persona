@@ -46,7 +46,22 @@ Leave LOG_PROMPTS on until Backstage is proven.
 - (a) done: dabfd78. Turns at http://localhost:8400/backstage/recent.
 - (b) done: 775083a. `turns` table in ~/.local/share/persona/tool_log.db.
 - (c) done: 5bd0e6d. Prices kept in ~/.local/share/persona/prices/.
-- Next: (d), the window.
+  Price-change alert tested end to end (faked an old qwen price): System
+  spoke it, and the real price was saved back.
+- (d) done: c6e6e8f. "show backstage" opens the window; placement code
+  shared with the data window in persona_side_window.py.
+- A real Sal turn through the full stack recorded correctly.
+
+## Things noticed
+
+- Every hub start resets the room to Echo alone (by design). Restarting
+  the hub for testing silently takes Sal out of the room; load her back
+  (POST /persona/default/load, or the roster) before testing replies.
+- The data and Backstage windows open in the same spot beside the chat,
+  so the later one covers the other.
+- Sal spends most output tokens reasoning (133 of 156 on a one-sentence
+  reply), and ~400 input tokens per round are tool descriptions.
+- Next idea: turn LOG_PROMPTS off now that Backstage shows prompts.
 
 ## Open items
 
