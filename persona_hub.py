@@ -919,6 +919,29 @@ def stop_speaking(normalized: str) -> None:
 
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
 
+def absent_persona_named(spoken_words: str, loaded: list[str]) -> str:
+    """
+    Return the persona whose name is the first word of the input, if that
+    persona is not in the chat room. Otherwise return an empty string.
+
+    Used in named mode, where talking to someone who isn't here would
+    otherwise get no reply and no sign of why. System is skipped: its
+    name starts commands, and it never sits in the room.
+    """
+    words = spoken_words.split()
+    if not words:
+        return ""
+    first_word = words[0]
+
+    for pname, persona in state.personas.items():
+        if pname in loaded or pname == SUMMARY_SPEAKER:
+            continue
+        if first_word in persona.wake_words:
+            return pname
+
+    return ""
+
+
 def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[list[str], bool]:
     """
     Decide which loaded personas should respond to this input, and whether
@@ -950,7 +973,8 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
       6. Quiet phrases     → switch to named mode, return ([], True)
       7. BROADCAST_PHRASES → all loaded personas
       8. Named mode → persona whose wake word matches (and switches the
-         room to open mode for what follows), or []
+         room to open mode for what follows), or []. If the first word
+         names a persona who is out of the room, System says so.
       9. Open mode  → all loaded personas
     """
     global MODE
@@ -1084,6 +1108,16 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
                     MODE = "open"
                     print(f"mode → open (named {pname})")
                     return [pname], True
+
+        # Nobody here answers to that name. If it names someone who is
+        # out of the room, System says so. The sentence doesn't start
+        # with the name, so if the mic hears it, it won't call them again.
+        missing = absent_persona_named(spoken_words, loaded)
+        if missing:
+            notice = "Nobody named " + display_name(missing) + " is in the room."
+            print("named miss: " + missing)
+            emit("log", notice)
+            threading.Thread(target=say_summary, args=(notice,), daemon=True).start()
         return [], True
 
     return list(loaded), True
