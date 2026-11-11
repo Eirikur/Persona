@@ -32,6 +32,7 @@
     --text-dim:     #4A5A68;
     --text-muted:   #607080;
     --text-info:    #8FA0AE;   /* model and voice on the bubble info line */
+    --roster-here:  #FFFFFF;   /* roster name of a persona in the chat room */
     --accent-sal:   #b8956a;
     --accent-user:  #5a7a6a;
     --error:        #d9534f;   /* errors only: the "!" and the tab label */
@@ -374,13 +375,13 @@
     border-bottom: 1px solid var(--border);
   }
 
-  /* Present in the chat: brighter. Not present: dim. Click to join or to
-     find their last bubble; right-click for the Remove popup. */
+  /* In the chat room: white. Not in the room: dim. Click to add or remove;
+     double-click to find their last bubble; right-click for the Remove popup. */
   .roster-name {
     font-size: 11px;           /* two steps above .tab (9px), the bar just above */
     letter-spacing: 0.1em;
     text-transform: capitalize;
-    color: var(--text-info);
+    color: var(--roster-here);
     cursor: pointer;
   }
 
