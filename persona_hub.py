@@ -39,7 +39,7 @@ from persona_schemas import (
     DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES, PROVIDER_NAMES, QUIET_REQUESTS,
     REPLY_WAIT, REPLY_WAIT_DEEP, RESEARCH_DEEP_PHRASES, RESEARCH_PRESETS,
     SPEECH_EVENT_TYPES, Persona, VoiceProfile, clean_setup_name, load, save,
-    save_setup,
+    save_roster, save_setup,
 )
 from persona_scripts import SCRIPTS, script_output
 import persona_backstage
@@ -242,10 +242,19 @@ BROADCAST_PHRASES = (
 
 state          = load()
 
-# Who is in the chat room is temporary: every start begins with Echo alone,
-# whatever an earlier run saved. Changing it deliberately will be a separate gesture.
-state.loaded_personas = ["echo"]
-state.active_persona  = "echo"
+# The chat room comes back as it was left: joining and leaving are saved
+# as they happen (see save_roster). Names no longer known are dropped. If
+# nobody is left, Echo starts alone, so there is always someone to answer.
+room = []
+for name in state.loaded_personas:
+    if name in state.personas:
+        room.append(name)
+
+if not room:
+    room = ["echo"]
+
+state.loaded_personas = room
+state.active_persona  = room[0]
 
 speaking       = False   # True from the moment a reply goes out until its audio ends
 
@@ -1175,6 +1184,7 @@ def load_persona(persona_name: str):
 
     if persona_name not in state.loaded_personas:
         state.loaded_personas.append(persona_name)
+        save_roster(state)
 
     emit("roster", "", loaded_personas=state.loaded_personas)
     print(f"persona {persona_name} joined the chat")
@@ -1189,6 +1199,7 @@ def unload_persona(persona_name: str):
 
     if persona_name in state.loaded_personas:
         state.loaded_personas.remove(persona_name)
+        save_roster(state)
 
     emit("roster", "", loaded_personas=state.loaded_personas)
     print(f"persona {persona_name} left the chat")

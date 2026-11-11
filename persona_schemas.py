@@ -353,6 +353,25 @@ def save(state: GlobalState) -> None:
     STATE_FILE.write_text(json.dumps(asdict(state), indent=2))
 
 
+def save_roster(state: GlobalState) -> None:
+    """
+    Write only who is in the chat room into state.json, leaving everything
+    else in the file as it was. Joining or leaving the room saves at once,
+    but session-only changes (a dropped font or voice) are kept on disk
+    only by "system persist".
+
+    With no state file yet, there is nothing to leave alone, so the whole
+    state is written.
+    """
+    if not STATE_FILE.exists():
+        save(state)
+        return
+
+    data = json.loads(STATE_FILE.read_text())
+    data["loaded_personas"] = state.loaded_personas
+    STATE_FILE.write_text(json.dumps(data, indent=2))
+
+
 # ─── Setups ───────────────────────────────────────────────────────────────────
 
 # A setup is a named copy of the whole system state, in the same format as
