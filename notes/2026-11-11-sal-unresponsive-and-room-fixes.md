@@ -45,11 +45,11 @@ chosen for Sal mode on 2026-11-09.
    alone only if nobody is left. Replaces the old "every start begins with
    Echo alone" rule (owner chose auto-save over persist-only).
 
-4. **(uncommitted) roster re-read on reconnect.** The page re-read mute
+4. **42c8645 (committed 2026-11-20) — roster re-read on reconnect.** The page re-read mute
    but not the roster when its event stream reconnected after a hub
    restart, so a change during the restart left a stale white name (Echo,
-   seen live). Now `es.onopen` also calls `loadRoster()`. Owner approved;
-   commit after testing.
+   seen live). Now `es.onopen` also calls `loadRoster()`. Owner approved
+   and confirmed it works.
 
 ## Behavior changes to know
 

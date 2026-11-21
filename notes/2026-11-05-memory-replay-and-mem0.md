@@ -97,3 +97,5 @@ unchanged.
   the new window's name may need thought.
 - mem0's `event_id` can be looked up later to see what mem0 actually
   decided to store from an exchange. That is the instrumenting step.
+  **Done 2026-11-20** as the Memory window ("show memory"), the mem0 half
+  of the trace idea; see notes/2026-11-20-memory-window.md.
