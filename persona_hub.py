@@ -44,6 +44,7 @@ from persona_schemas import (
 from persona_scripts import SCRIPTS, script_output
 import persona_backstage
 import persona_data_window
+import persona_memory_window
 import persona_memory
 import persona_text_filter
 
@@ -1242,6 +1243,64 @@ def set_mem0(setting: str):
     return {"mem0": MEM0_ON}
 
 
+def show_memory_record(kind: str, persona_name: str, details: dict) -> dict:
+    """
+    Keep a mem0 search or save for the Memory window, tell listening pages
+    about it with a short "memory" notice, and return the record.
+    """
+    record = persona_memory_window.add_record("mem0", kind, persona_name, details)
+    emit("memory", persona_memory_window.notice_text(record),
+         id=record["id"], error=bool(record.get("error")))
+    return record
+
+
+def save_to_mem0(persona_name: str, text: str, reply: str) -> None:
+    """
+    Hand one exchange to mem0, then follow it until mem0 has decided what
+    to keep. The Memory window sees the save at once, as pending, and again
+    when the decision is in. Runs in its own thread.
+    """
+    save = {
+        "said":      text,
+        "reply":     reply,
+        "status":    "PENDING",
+        "decisions": [],
+        "seconds":   0.0,
+    }
+    save.update(persona_memory.mem0_save(text, reply))
+
+    if save["error"]:
+        save["status"] = "FAILED"
+
+    record = show_memory_record("save", persona_name, save)
+
+    if not save["event_id"]:
+        return
+
+    outcome = persona_memory.mem0_follow(save["event_id"])
+    record  = persona_memory_window.update_record(record["id"], outcome)
+
+    if record:
+        emit("memory", persona_memory_window.notice_text(record),
+             id=record["id"], error=bool(record.get("error")))
+
+
+@app.get("/memory/recent")
+def memory_recent():
+    """Every kept mem0 search and save, newest first, for the Memory window."""
+    return persona_memory_window.recent_records()
+
+
+@app.get("/memory/{record_id}")
+def memory_record(record_id: int):
+    """One kept mem0 search or save, by id; 404 if it has been forgotten."""
+    record = persona_memory_window.find_record(record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no such memory record")
+
+    return record
+
+
 @app.post("/research/{depth}")
 def set_research_depth(depth: str):
     """
@@ -1669,8 +1728,9 @@ def converse(req: ThinkRequest):
         system_prompt = persona.system_prompt
 
         if use_mem0:
-            memories      = persona_memory.mem0_search(req.text)
-            system_prompt = system_prompt + persona_memory.memories_block(memories)
+            search        = persona_memory.mem0_search(req.text)
+            system_prompt = system_prompt + persona_memory.memories_block(search["hits"])
+            show_memory_record("search", pname, search)
 
         depth = research_depth_for(req.text)
         if depth != "auto":
@@ -1683,9 +1743,9 @@ def converse(req: ThinkRequest):
 
         persona_memory.remember_exchange(pname, req.text, response)
 
-        if use_mem0:
-            threading.Thread(target=persona_memory.mem0_save,
-                             args=(req.text, response), daemon=True).start()
+        if use_mem0 and response.strip():
+            threading.Thread(target=save_to_mem0,
+                             args=(pname, req.text, response), daemon=True).start()
 
         if response:
             print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")

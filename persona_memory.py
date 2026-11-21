@@ -15,7 +15,8 @@ closest to the new message are added to the end of the system prompt
 under "Memories:", the way mem0's companion example does it. Saving takes
 mem0 a few seconds; replay covers the gap. mem0 is called over its plain
 REST API with httpx, so what is sent and received is exactly what the hub
-log shows.
+log shows. Searches and saves also return what happened, and the hub
+keeps that for the Memory window (persona_memory_window.py).
 
 The prompt that goes to the LLM is a list of messages, each a role and some
 text, in this order:
@@ -36,8 +37,8 @@ import time
 import httpx
 
 from persona_schemas import (
-    MEM0_ADD_TIMEOUT, MEM0_SEARCH_TIMEOUT, MEM0_TOP_K, MEM0_URL, MEM0_USER_ID,
-    PROMPT_MARK, REPLAY_EXCHANGES,
+    MEM0_ADD_TIMEOUT, MEM0_EVENT_POLL, MEM0_EVENT_WAIT, MEM0_SEARCH_TIMEOUT,
+    MEM0_TOP_K, MEM0_URL, MEM0_USER_ID, PROMPT_MARK, REPLAY_EXCHANGES,
 )
 
 
@@ -102,18 +103,26 @@ def mem0_headers() -> dict:
     return {"Authorization": "Token " + mem0_key()}
 
 
-def mem0_search(text: str) -> list[str]:
+def mem0_search(text: str) -> dict:
     """
-    Ask mem0 for the stored memories closest to this text, best match first,
-    and return their wording. Each hit and its score goes to the hub log.
+    Ask mem0 for the stored memories closest to this text, best match first.
+    Each hit and its score also goes to the hub log.
+
+    Returns what happened, for the reply and for the Memory window:
+
+        {"query": the text, "hits": [{"memory", "score", "created"}, ...],
+         "seconds": how long mem0 took, "error": "" or what went wrong}
 
     The reply is waiting on this, so any trouble (no key, no answer in
-    MEM0_SEARCH_TIMEOUT seconds, an error) means no memories this turn,
-    with a line in the log saying why.
+    MEM0_SEARCH_TIMEOUT seconds, an error) means no hits this turn, with
+    the reason in "error" and in the log.
     """
+    search = {"query": text, "hits": [], "seconds": 0.0, "error": ""}
+
     if not mem0_key():
-        print("mem0 search skipped: no MEM0_API_KEY in .env")
-        return []
+        search["error"] = "skipped: no MEM0_API_KEY in .env"
+        print("mem0 search " + search["error"])
+        return search
 
     request = {
         "query":   text,
@@ -121,9 +130,7 @@ def mem0_search(text: str) -> list[str]:
         "top_k":   MEM0_TOP_K,
     }
 
-    started  = time.time()
-    memories = []
-    lines    = []
+    started = time.time()
 
     try:
         answer = httpx.post(MEM0_URL + "/v3/memories/search/", json=request,
@@ -131,45 +138,56 @@ def mem0_search(text: str) -> list[str]:
         answer.raise_for_status()
 
         for result in answer.json()["results"]:
-            memories.append(result["memory"])
-            lines.append(PROMPT_MARK + str(result.get("score")) + "  " + result["memory"])
+            hit = {
+                "memory":  result["memory"],
+                "score":   result.get("score"),
+                "created": result.get("created_at", ""),
+            }
+            search["hits"].append(hit)
 
     except Exception as problem:
-        print(f"mem0 search failed, no memories this turn: {type(problem).__name__} {problem}")
-        return []
+        search["error"] = type(problem).__name__ + " " + str(problem)
 
-    seconds = time.time() - started
-    print(f"mem0 search: {len(memories)} memories in {seconds:.2f}s")
+    search["seconds"] = round(time.time() - started, 2)
 
-    for line in lines:
-        print(line)
+    if search["error"]:
+        print("mem0 search failed, no memories this turn: " + search["error"])
+        return search
 
-    return memories
+    print(f"mem0 search: {len(search['hits'])} memories in {search['seconds']:.2f}s")
+
+    for hit in search["hits"]:
+        print(PROMPT_MARK + str(hit["score"]) + "  " + hit["memory"])
+
+    return search
 
 
-def memories_block(memories: list[str]) -> str:
+def memories_block(hits: list[dict]) -> str:
     """
     The text added to the end of the system prompt: "Memories:" and one
     memory per line. Empty when there are none, so the prompt is unchanged.
     """
-    if not memories:
+    if not hits:
         return ""
 
     lines = ["", "", "Memories:"]
-    for memory in memories:
-        lines.append("- " + memory)
+    for hit in hits:
+        lines.append("- " + hit["memory"])
 
     return "\n".join(lines)
 
 
-def mem0_save(text: str, reply: str) -> None:
+def mem0_save(text: str, reply: str) -> dict:
     """
     Hand one exchange to mem0, which decides on its own what (if anything)
-    to remember from it. mem0 answers at once with "PENDING" and does the
-    work over the next few seconds. Meant to run in a background thread.
+    to remember from it. mem0 answers at once with "PENDING" and an event
+    id, and does the work over the next few seconds; mem0_follow() waits
+    for its decision.
+
+    Returns {"event_id": "" if none, "error": "" or what went wrong}.
     """
-    if not mem0_key() or not reply.strip():
-        return
+    if not mem0_key():
+        return {"event_id": "", "error": "skipped: no MEM0_API_KEY in .env"}
 
     request = {
         "messages": [
@@ -185,10 +203,74 @@ def mem0_save(text: str, reply: str) -> None:
         answer = httpx.post(MEM0_URL + "/v3/memories/add/", json=request,
                             headers=mem0_headers(), timeout=MEM0_ADD_TIMEOUT)
         answer.raise_for_status()
-        seconds = time.time() - started
-        print(f"mem0 save ({seconds:.1f}s): " + answer.text)
     except Exception as problem:
-        print(f"mem0 save failed: {type(problem).__name__} {problem}")
+        error = type(problem).__name__ + " " + str(problem)
+        print("mem0 save failed: " + error)
+        return {"event_id": "", "error": error}
+
+    seconds = time.time() - started
+    print(f"mem0 save ({seconds:.1f}s): " + answer.text)
+
+    event_id = answer.json().get("event_id", "")
+    if not event_id:
+        return {"event_id": "", "error": "mem0 gave no event id: " + answer.text}
+
+    return {"event_id": event_id, "error": ""}
+
+
+def mem0_follow(event_id: str) -> dict:
+    """
+    Ask mem0 every MEM0_EVENT_POLL seconds how a save is going, until it
+    has finished or MEM0_EVENT_WAIT seconds have passed. Meant to run in a
+    background thread.
+
+    Returns what mem0 decided:
+
+        {"status": "SUCCEEDED", "FAILED", or the last status seen,
+         "decisions": [{"event": "ADD" / "UPDATE" / "DELETE", "memory"}, ...],
+         "seconds": mem0's own working time, "error": "" or what went wrong}
+
+    No decisions after SUCCEEDED means mem0 found nothing worth keeping.
+    """
+    outcome = {"status": "PENDING", "decisions": [], "seconds": 0.0, "error": ""}
+    started = time.time()
+
+    while time.time() - started < MEM0_EVENT_WAIT:
+        try:
+            answer = httpx.get(MEM0_URL + "/v1/event/" + event_id + "/",
+                               headers=mem0_headers(), timeout=MEM0_SEARCH_TIMEOUT)
+            answer.raise_for_status()
+            event = answer.json()
+        except Exception as problem:
+            outcome["error"] = type(problem).__name__ + " " + str(problem)
+            time.sleep(MEM0_EVENT_POLL)
+            continue
+
+        outcome["status"] = event.get("status", "")
+        outcome["error"]  = event.get("error") or ""
+
+        if outcome["status"] in ("SUCCEEDED", "FAILED"):
+            for result in event.get("results") or []:
+                decision = {
+                    "event":  result.get("event", ""),
+                    "memory": result.get("data", {}).get("memory", ""),
+                }
+                outcome["decisions"].append(decision)
+
+            outcome["seconds"] = round((event.get("latency") or 0) / 1000, 1)
+            break
+
+        time.sleep(MEM0_EVENT_POLL)
+
+    if outcome["status"] not in ("SUCCEEDED", "FAILED") and not outcome["error"]:
+        outcome["error"] = "mem0 had not finished after " + str(MEM0_EVENT_WAIT) + " s"
+
+    print(f"mem0 decided ({outcome['status']}): {len(outcome['decisions'])} memories")
+
+    for decision in outcome["decisions"]:
+        print(PROMPT_MARK + decision["event"] + "  " + decision["memory"])
+
+    return outcome
 
 
 # ─── Showing the Prompt ───────────────────────────────────────────────────────
