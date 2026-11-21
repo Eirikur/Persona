@@ -139,6 +139,7 @@ def mem0_search(text: str) -> dict:
 
         for result in answer.json()["results"]:
             hit = {
+                "id":      result.get("id", ""),
                 "memory":  result["memory"],
                 "score":   result.get("score"),
                 "created": result.get("created_at", ""),
@@ -227,12 +228,15 @@ def mem0_follow(event_id: str) -> dict:
     Returns what mem0 decided:
 
         {"status": "SUCCEEDED", "FAILED", or the last status seen,
-         "decisions": [{"event": "ADD" / "UPDATE" / "DELETE", "memory"}, ...],
+         "decisions": [{"id", "event": "ADD" / "UPDATE" / "DELETE", "memory"}, ...],
+         "raw": mem0's results exactly as it sent them,
          "seconds": mem0's own working time, "error": "" or what went wrong}
 
     No decisions after SUCCEEDED means mem0 found nothing worth keeping.
+    "raw" is kept because only ADD has been seen so far; an UPDATE or
+    DELETE may carry more (the old text, say) than "decisions" picks out.
     """
-    outcome = {"status": "PENDING", "decisions": [], "seconds": 0.0, "error": ""}
+    outcome = {"status": "PENDING", "decisions": [], "raw": [], "seconds": 0.0, "error": ""}
     started = time.time()
 
     while time.time() - started < MEM0_EVENT_WAIT:
@@ -250,8 +254,11 @@ def mem0_follow(event_id: str) -> dict:
         outcome["error"]  = event.get("error") or ""
 
         if outcome["status"] in ("SUCCEEDED", "FAILED"):
-            for result in event.get("results") or []:
+            outcome["raw"] = event.get("results") or []
+
+            for result in outcome["raw"]:
                 decision = {
+                    "id":     result.get("id", ""),
                     "event":  result.get("event", ""),
                     "memory": result.get("data", {}).get("memory", ""),
                 }
