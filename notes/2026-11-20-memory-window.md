@@ -42,14 +42,28 @@ from 2026-11-11 was committed on main first (42c8645).
   UPDATE and DELETE have not been seen yet; the raw answer is kept for
   when they are.
 
+## Merge and push plan (owner approved, 2026-11-20)
+
+1. Commit this note on `mem0-window`.
+2. `git switch main`, then `git merge --ff-only mem0-window`. main has not
+   moved since the branch began (42c8645), so it fast-forwards; no merge
+   commit, nothing rewritten.
+3. `git push origin main`. This also carries 5 earlier commits that were
+   never pushed: e2ba7c9, 159c3a1, 5353f43, 269f434 (2026-11-11 room
+   fixes) and 42c8645 (roster on reconnect).
+4. The live hub runs from the working tree, which is identical after the
+   fast-forward, so it needs no restart.
+
 ## Open ideas (not built)
+
+The owner asked to keep the first two for later (2026-11-20).
 
 - **Score cut-off for search.** Hits at 0.04-0.08 (unrelated memories
   about volume) still went into the prompt; there is no minimum score.
+- **"List everything mem0 holds"** view, as opposed to the per-turn log.
 - **Event polls vs free tier.** Each save makes about 4-5 event lookups.
   Check the mem0 dashboard to see whether those count; if they do, wait
   ~2 s before the first poll.
-- **"List everything mem0 holds"** view, as opposed to the per-turn log.
 - **Cognee as a second watched memory system** (owner's idea, not asked for).
 - The search runs on the whole input, "Sal," prefix included.
 
