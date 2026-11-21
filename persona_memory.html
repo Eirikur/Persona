@@ -242,8 +242,9 @@
   // The exchange sent to mem0, then what mem0 decided, then its raw answer.
   function saveBody(record, body) {
     body.appendChild(piece('div', 'label', 'sent to mem0'));
-    body.appendChild(taggedLine('owner', record.said));
-    body.appendChild(taggedLine(record.persona, record.reply));
+    // Models often start a reply with blank lines; they only waste space.
+    body.appendChild(taggedLine('owner', record.said.trim()));
+    body.appendChild(taggedLine(record.persona, record.reply.trim()));
 
     body.appendChild(piece('div', 'label', 'mem0 decided'));
 
