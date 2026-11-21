@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Persona Memory</title>
+<style>
+  /* ─── Fonts and Colors (same as persona_backstage.html) ───────────────── */
+
+  @font-face {
+    font-family: 'Lucida Casual';
+    src: url('fonts/lucida-casual.ttf') format('truetype');
+    font-weight: 400; font-style: normal;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #1E2B35;
+    --surface:     #2A3C48;
+    --border:      #304454;
+    --text:        #C4CDD5;
+    --text-result: #D0D8DF;
+    --text-muted:  #607080;
+    --text-info:   #8FA0AE;
+    --accent:      #b8956a;
+    --error:       #d07070;
+    --font-ui:     'Lucida Casual', 'Lucida Sans', sans-serif;
+    --font-data:   'DejaVu Sans Mono', monospace;
+    --radius:      10px;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+
+  /* ─── Layout ───────────────────────────────────────────────────────────── */
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 12px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  #mem0-state {
+    margin-left: 16px;
+    color: var(--text-muted);
+    letter-spacing: normal;
+  }
+
+  #records {
+    padding: 16px 20px;
+  }
+
+  #empty {
+    color: var(--text-muted);
+  }
+
+
+  /* ─── One Record ───────────────────────────────────────────────────────── */
+
+  details.record {
+    margin-bottom: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  summary {
+    padding: 8px 14px;
+    cursor: pointer;
+    color: var(--text-info);
+  }
+
+  summary .persona {
+    color: var(--accent);
+  }
+
+  .body {
+    padding: 0 14px 10px 14px;
+  }
+
+  .label {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .line {
+    font-family: var(--font-data);
+    font-size: 14px;
+    color: var(--text-result);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* The score or ADD / UPDATE / DELETE in front of each memory. */
+  .tag {
+    color: var(--accent);
+  }
+
+  .muted {
+    color: var(--text-muted);
+  }
+
+  .error {
+    color: var(--error);
+  }
+
+  details.raw > summary {
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--font-data);
+    font-size: 13px;
+    color: var(--text-info);
+  }
+</style>
+</head>
+<body>
+
+<header>PERSONA MEMORY<span id="mem0-state"></span></header>
+
+<div id="records">
+  <p id="empty">No memory activity yet. Each mem0 search (before a reply) and save (after one) appears here.</p>
+</div>
+
+<script>
+  // Shows what mem0 looks up and what it keeps, newest on top. A search
+  // record lists each memory found for the input, with its score. A save
+  // record shows the exchange sent to mem0, then, a few seconds later,
+  // what mem0 decided to keep: the hub sends a second "memory" notice for
+  // the same record, and the page replaces it. The hub keeps the last 50
+  // records (see persona_memory_window.py).
+  //
+  // Records hold what was said and what mem0 wrote, so text is only ever
+  // set with textContent, never as HTML.
+
+  const recordsEl = document.getElementById('records');
+  const emptyEl   = document.getElementById('empty');
+  const stateEl   = document.getElementById('mem0-state');
+
+
+  // ─── Building Pieces ────────────────────────────────────────────────────
+
+  // A small element with a class and some text.
+  function piece(tag, className, text) {
+    const element = document.createElement(tag);
+    element.className   = className;
+    element.textContent = text;
+    return element;
+  }
+
+
+  // One line of data: a highlighted tag (a score, ADD...) then the text.
+  function taggedLine(tagText, text) {
+    const line = piece('div', 'line', '');
+    line.appendChild(piece('span', 'tag', tagText + '  '));
+    line.appendChild(document.createTextNode(text));
+    return line;
+  }
+
+
+  // A number as two digits, e.g. 7 becomes "07".
+  function twoDigits(number) {
+    return String(number).padStart(2, '0');
+  }
+
+
+  // mem0's "created_at" (in UTC) as local date and time, e.g. "2026-11-20 22:16",
+  // to match the local times on the records.
+  function shortDate(created) {
+    if (!created) return '';
+
+    const when = new Date(created);
+    const date = when.getFullYear() + '-' + twoDigits(when.getMonth() + 1) + '-' + twoDigits(when.getDate());
+    const time = twoDigits(when.getHours()) + ':' + twoDigits(when.getMinutes());
+
+    return date + ' ' + time;
+  }
+
+
+  // ─── One Search ─────────────────────────────────────────────────────────
+
+  // The one-line heading after the persona's name.
+  function searchHeading(record) {
+    if (record.error) return 'searched: ' + record.error;
+    return 'searched: ' + record.hits.length + ' found in ' + record.seconds + ' s';
+  }
+
+
+  // What was searched for, and each memory found, best match first.
+  function searchBody(record, body) {
+    body.appendChild(piece('div', 'label', 'searched for'));
+    body.appendChild(piece('div', 'line', record.query));
+
+    if (record.error) {
+      body.appendChild(piece('div', 'line error', record.error));
+      return;
+    }
+
+    body.appendChild(piece('div', 'label', 'found, best match first (score, memory, when kept)'));
+
+    if (!record.hits.length) {
+      body.appendChild(piece('div', 'line muted', 'nothing'));
+    }
+
+    for (const hit of record.hits) {
+      const line = taggedLine(String(hit.score), hit.memory);
+      line.appendChild(piece('span', 'muted', '  ' + shortDate(hit.created)));
+      body.appendChild(line);
+    }
+  }
+
+
+  // ─── One Save ───────────────────────────────────────────────────────────
+
+  // The one-line heading after the persona's name.
+  function saveHeading(record) {
+    if (record.error) return 'saved: ' + record.error;
+    if (record.status !== 'SUCCEEDED') return 'saved: waiting for mem0 to decide';
+    if (!record.decisions.length) return 'saved: nothing kept';
+    return 'saved: ' + record.decisions.length + ' decided in ' + record.seconds + ' s';
+  }
+
+
+  // The exchange sent to mem0, then what mem0 decided, then its raw answer.
+  function saveBody(record, body) {
+    body.appendChild(piece('div', 'label', 'sent to mem0'));
+    body.appendChild(taggedLine('owner', record.said));
+    body.appendChild(taggedLine(record.persona, record.reply));
+
+    body.appendChild(piece('div', 'label', 'mem0 decided'));
+
+    if (record.error) {
+      body.appendChild(piece('div', 'line error', record.error));
+    } else if (record.status !== 'SUCCEEDED') {
+      body.appendChild(piece('div', 'line muted', 'not yet (' + record.status.toLowerCase() + ')'));
+    } else if (!record.decisions.length) {
+      body.appendChild(piece('div', 'line muted', 'nothing worth keeping'));
+    }
+
+    for (const decision of record.decisions) {
+      body.appendChild(taggedLine(decision.event, decision.memory));
+    }
+
+    // Everything mem0 said about this save, folded: UPDATE or DELETE may
+    // carry more than the event and the wording shown above.
+    if (record.raw && record.raw.length) {
+      const raw = document.createElement('details');
+      raw.className = 'raw';
+      raw.appendChild(piece('summary', '', 'mem0\'s raw answer'));
+      raw.appendChild(piece('pre', '', JSON.stringify(record.raw, null, 2)));
+      body.appendChild(raw);
+    }
+  }
+
+
+  // ─── One Record ─────────────────────────────────────────────────────────
+
+  // Build the element for one record: time, persona and a short heading,
+  // with the details open under it.
+  function recordElement(record) {
+    const details = document.createElement('details');
+    details.className  = 'record';
+    details.dataset.id = record.id;
+    details.open       = true;
+
+    const isSearch = record.kind === 'search';
+    const heading  = isSearch ? searchHeading(record) : saveHeading(record);
+
+    const summary = document.createElement('summary');
+    summary.appendChild(document.createTextNode(record.time + '  ' + record.system + '  '));
+    summary.appendChild(piece('span', 'persona', record.persona));
+    summary.appendChild(document.createTextNode('  ' + heading));
+
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    if (isSearch) {
+      searchBody(record, body);
+    } else {
+      saveBody(record, body);
+    }
+
+    details.appendChild(summary);
+    details.appendChild(body);
+    return details;
+  }
+
+
+  // Show a record: replace it where it is if it is already shown (a save
+  // that mem0 has now decided on), otherwise put it on top.
+  function showRecord(record) {
+    emptyEl.style.display = 'none';
+
+    const element = recordElement(record);
+    const shown   = recordsEl.querySelector('details[data-id="' + record.id + '"]');
+
+    if (shown) {
+      element.open = shown.open;
+      shown.replaceWith(element);
+    } else {
+      recordsEl.insertBefore(element, recordsEl.firstChild);
+    }
+  }
+
+
+  // ─── Talking to the Hub ─────────────────────────────────────────────────
+
+  // Show whether mem0 is on, from the hub's state. When it is off, nothing
+  // new will appear here, and the window says why.
+  async function loadMem0State() {
+    const response = await fetch('/state');
+    const state    = await response.json();
+
+    if (state.mem0) {
+      stateEl.textContent = 'mem0 is on';
+    } else {
+      stateEl.textContent = 'mem0 is off (tick the mem0 box on the Settings tab)';
+    }
+  }
+
+
+  // Replace everything shown with the hub's current list. Run on every
+  // (re)connect, so nothing is missed or shown twice across a hub restart.
+  async function loadAll() {
+    const response = await fetch('/memory/recent');
+    const records  = await response.json();
+
+    for (const old of recordsEl.querySelectorAll(':scope > details')) {
+      old.remove();
+    }
+    emptyEl.style.display = records.length ? 'none' : '';
+
+    // The hub sends newest first; add oldest first so the newest ends on top.
+    for (const record of records.reverse()) {
+      showRecord(record);
+    }
+  }
+
+
+  // Fetch one record the hub just announced (new, or newly decided) and show it.
+  async function loadOne(id) {
+    const response = await fetch('/memory/' + id);
+    if (!response.ok) return;
+
+    showRecord(await response.json());
+  }
+
+
+  // Listen for "memory" notices, and for the hub's mem0 on/off log lines;
+  // everything else on the stream is for the chat window. Closing this
+  // window never shuts Persona down.
+  const events = new EventSource('/events');
+
+  events.onopen = () => {
+    loadAll();
+    loadMem0State();
+  };
+
+  events.onmessage = e => {
+    const data = JSON.parse(e.data);
+
+    if (data.type === 'memory') {
+      loadOne(data.id);
+    } else if (data.type === 'log' && data.text.startsWith('mem0 ')) {
+      loadMem0State();
+    }
+  };
+</script>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
 """Persona side windows — opening a window beside the chat window.
 
-The data window and the Backstage window are both web pages from the hub,
+The data, Backstage and Memory windows are all web pages from the hub,
 shown in their own Chromium window next to the chat window. This file
 opens one, places it, and brings it forward when asked again. Each caller
 passes its window's title, address and width.

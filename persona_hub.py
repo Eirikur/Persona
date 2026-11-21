@@ -232,6 +232,21 @@ BACKSTAGE_PHRASES = (
     "show me back stage",
 )
 
+# Phrases that open (or bring forward) the Memory window, which shows what
+# mem0 looked up and kept. Matched like DATA_PHRASES. Whisper won't write
+# "mem0", so the spoken forms say "memory"; "show mem0" is for typing.
+MEMORY_PHRASES = (
+    "show memory",
+    "show the memory",
+    "show me memory",
+    "show me the memory",
+    "show memories",
+    "show the memories",
+    "show me the memories",
+    "show mem zero",
+    "show mem0",
+)
+
 # Phrases that route input to all loaded personas simultaneously.
 BROADCAST_PHRASES = (
     "hi gang",    "hello gang",    "hey gang",
@@ -421,9 +436,13 @@ def chat_window_focused() -> bool:
         ).decode().strip()
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
-    # The data and Backstage windows count too: raising the chat window over
-    # one while the owner reads it would hide what they asked to see.
-    side_windows = (persona_data_window.DATA_WINDOW_TITLE, persona_backstage.BACKSTAGE_WINDOW_TITLE)
+    # The side windows count too: raising the chat window over one while
+    # the owner reads it would hide what they asked to see.
+    side_windows = (
+        persona_data_window.DATA_WINDOW_TITLE,
+        persona_backstage.BACKSTAGE_WINDOW_TITLE,
+        persona_memory_window.MEMORY_WINDOW_TITLE,
+    )
 
     return name == CHAT_WINDOW_TITLE or name in side_windows
 
@@ -1079,6 +1098,14 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
             print("backstage window: show")
             emit("log", "showing the Backstage window")
             threading.Thread(target=persona_backstage.show_window,
+                             args=(CHAT_WINDOW_TITLE,), daemon=True).start()
+            return [], True
+
+    for phrase in MEMORY_PHRASES:
+        if " " + phrase + " " in " " + spoken_words + " ":
+            print("memory window: show")
+            emit("log", "showing the Memory window")
+            threading.Thread(target=persona_memory_window.show_window,
                              args=(CHAT_WINDOW_TITLE,), daemon=True).start()
             return [], True
 
