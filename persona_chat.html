@@ -1376,9 +1376,12 @@
   function connectSSE() {
     const es = new EventSource('/events');
 
+    // A restarted hub may have changed the room while this page was
+    // disconnected, so re-read the roster along with the mute setting.
     es.onopen = () => {
       setLive('hearing');
       syncMuted();
+      loadRoster();
     };
 
     es.onerror = () => setLive(null);
