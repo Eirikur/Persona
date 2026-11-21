@@ -1275,7 +1275,7 @@ def show_memory_record(kind: str, persona_name: str, details: dict) -> dict:
     Keep a mem0 search or save for the Memory window, tell listening pages
     about it with a short "memory" notice, and return the record.
     """
-    record = persona_memory_window.add_record("mem0", kind, persona_name, details)
+    record = persona_memory_window.add_record("mem0", kind, display_name(persona_name), details)
     emit("memory", persona_memory_window.notice_text(record),
          id=record["id"], error=bool(record.get("error")))
     return record
