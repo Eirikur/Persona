@@ -8,6 +8,15 @@ persona_schemas.py.
 
 The history lives in memory only. A hub restart starts every persona fresh.
 
+Overhearing: when one persona replies, the others in the room overhear the
+exchange and keep the last OVERHEARD_EXCHANGES of them. A persona that
+speaks next sees them at the end of its system prompt, under "You hear the
+following but do not respond ...". They are kept apart from the replay
+history, which must alternate owner, persona, owner, persona (some
+providers refuse two owner messages in a row) and must hold only the
+persona's own words. Overheard exchanges are never saved to mem0: the
+persona that replied saves them, and all personas share one mem0 user.
+
 mem0 (optional, the "mem0" box on the Settings tab): after each exchange,
 mem0's hosted service reads it and its own LLM decides what is worth
 keeping ("User has a dog named Rufus"). Before each reply, the memories
@@ -39,7 +48,8 @@ import httpx
 from persona_schemas import (
     MEM0_ADD_TIMEOUT, MEM0_EVENT_POLL, MEM0_EVENT_WAIT, MEM0_LIST_MAX_PAGES,
     MEM0_LIST_PAGE_SIZE, MEM0_MIN_SCORE, MEM0_SEARCH_TIMEOUT, MEM0_TOP_K,
-    MEM0_URL, MEM0_USER_ID, PROMPT_MARK, REPLAY_EXCHANGES,
+    MEM0_URL, MEM0_USER_ID, OVERHEARD_EXCHANGES, OVERHEARD_HEADER,
+    OVERHEARD_OWNER_LABEL, PROMPT_MARK, REPLAY_EXCHANGES,
 )
 
 
@@ -90,6 +100,61 @@ def exchanges_kept(persona_name: str) -> int:
     """How many earlier exchanges this persona would replay right now."""
     with history_lock:
         return len(history.get(persona_name, [])) // 2
+
+
+# ─── Overheard Exchanges ──────────────────────────────────────────────────────
+
+# Persona name -> list of exchanges it overheard, oldest first. Each one is
+# a dict like {"text": "Sal, is it raining?", "speaker": "Sal", "reply": "..."},
+# speaker being the display name of the persona that replied.
+overheard      = {}
+overheard_lock = threading.Lock()
+
+
+def overhear(listeners: list[str], text: str, speaker: str, reply: str) -> None:
+    """
+    Let each listener overhear one exchange: the owner's text and the
+    reply another persona (speaker, a display name) gave it. Each keeps
+    only its last OVERHEARD_EXCHANGES. An empty reply is not kept, and
+    nothing is kept when OVERHEARD_EXCHANGES is 0 (overhearing off).
+    """
+    if not reply.strip() or OVERHEARD_EXCHANGES == 0:
+        return
+
+    exchange = {"text": text, "speaker": speaker, "reply": reply}
+
+    with overheard_lock:
+        for listener in listeners:
+            exchanges = overheard.setdefault(listener, [])
+            exchanges.append(exchange)
+            del exchanges[:-OVERHEARD_EXCHANGES]
+
+
+def overheard_block(persona_name: str) -> str:
+    """
+    The text added to the end of this persona's system prompt: the
+    OVERHEARD_HEADER line, then each overheard exchange, oldest first, as
+    two quoted lines. Empty when it has overheard nothing, so the prompt
+    is unchanged.
+    """
+    with overheard_lock:
+        exchanges = list(overheard.get(persona_name, []))
+
+    if not exchanges:
+        return ""
+
+    lines = ["", "", OVERHEARD_HEADER]
+    for exchange in exchanges:
+        lines.append(OVERHEARD_OWNER_LABEL + ": \"" + exchange["text"].strip() + "\"")
+        lines.append(exchange["speaker"] + ": \"" + exchange["reply"].strip() + "\"")
+
+    return "\n".join(lines)
+
+
+def overheard_kept(persona_name: str) -> int:
+    """How many overheard exchanges this persona would see right now."""
+    with overheard_lock:
+        return len(overheard.get(persona_name, []))
 
 
 # ─── mem0 ─────────────────────────────────────────────────────────────────────

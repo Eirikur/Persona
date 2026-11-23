@@ -152,6 +152,21 @@ CONVERSATION_TIMEOUT = 30.0
 # a bigger, slower, costlier prompt on every turn.
 REPLAY_EXCHANGES = 10
 
+# Overhearing: when a persona replies, the others in the room overhear the
+# exchange (the owner's line and the reply) and keep the last few. A persona
+# sees what it overheard at the end of its system prompt the next time it
+# speaks itself (see persona_memory.py). One exchange is one line plus its
+# reply. 0 turns overhearing off.
+OVERHEARD_EXCHANGES = 10
+
+# What the owner is called in overheard exchanges: "User" is the name the
+# models already know the owner by.
+OVERHEARD_OWNER_LABEL = "User"
+
+# The line that opens the overheard exchanges in the system prompt.
+OVERHEARD_HEADER = ("You hear the following but do not respond because it "
+                    "is not addressed to you:")
+
 # Write the whole prompt (system prompt, replayed turns, new message) to the
 # hub log on every LLM call, so it can be read in the Logs tab. Off since
 # 2026-11-10: the Backstage window ("show backstage") shows the whole prompt,

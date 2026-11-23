@@ -1905,6 +1905,12 @@ def converse(req: ThinkRequest):
                 system_prompt = system_prompt + persona_memory.memories_block(search["hits"])
                 show_memory_record("search", pname, search)
 
+            # What this persona overheard others say goes last.
+            overheard_count = persona_memory.overheard_kept(pname)
+            if overheard_count:
+                print(f"[{pname}] overheard {overheard_count} exchange(s)")
+                system_prompt = system_prompt + persona_memory.overheard_block(pname)
+
             depth = research_depth_for(req.text)
             if depth != "auto":
                 print(f"[{pname}] research depth for this reply: {depth}")
@@ -1915,6 +1921,10 @@ def converse(req: ThinkRequest):
             llm_duration = time.time() - llm_start
 
             persona_memory.remember_exchange(pname, req.text, response)
+
+            # Everyone else in the room overhears the exchange.
+            listeners = [name for name in state.loaded_personas if name != pname]
+            persona_memory.overhear(listeners, req.text, display_name(pname), response)
 
             if use_mem0 and response.strip():
                 threading.Thread(target=save_to_mem0,

@@ -97,7 +97,14 @@ what the speaking persona saves is found by the others anyway.
    the persona thinks (`replying`) or talks (`speaking`).
 3. List instead of one name, newest bubble only, roster name gold.
    Checked in headless Chromium driven over its debugging port.
-4. Overhearing, with OVERHEARD_EXCHANGES.
+4. Overhearing, with OVERHEARD_EXCHANGES (0 = off), OVERHEARD_OWNER_LABEL
+   ("User") and OVERHEARD_HEADER (the owner's wording) in
+   persona_schemas.py; overhear() / overheard_block() in
+   persona_memory.py. Tested: told Sal a container number, Echo answered
+   it; Sal then knew what Echo said. Backstage shows the block at the end
+   of the system prompt. Every reply is overheard by everyone else in the
+   room, so in a broadcast a later persona sees the earlier ones' answers
+   to the same line.
 
 ## Side effects told to the owner
 
