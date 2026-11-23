@@ -176,6 +176,27 @@ def mem0_search(text: str) -> dict:
     return search
 
 
+def without_name(text: str, wake_words: list[str]) -> str:
+    """
+    The input without the persona's name in front, for searching mem0:
+    "Sal, what does the Kerch bridge connect?" becomes "what does the
+    Kerch bridge connect?". The name only adds noise to the match.
+
+    Only a whole first word counts, and the comma or other punctuation
+    after it goes too. If the name is all there is, the text is kept as it
+    was, so the search is never for nothing.
+    """
+    words = text.split(maxsplit=1)
+    if len(words) < 2:
+        return text
+
+    first_word = words[0].lower().strip(",.!?:;")
+    if first_word in wake_words:
+        return words[1]
+
+    return text
+
+
 def used_hits(hits: list[dict]) -> list[dict]:
     """The hits strong enough to go into the prompt (see mem0_search)."""
     used = []

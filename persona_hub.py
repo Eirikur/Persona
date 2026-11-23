@@ -1766,7 +1766,8 @@ def converse(req: ThinkRequest):
         system_prompt = persona.system_prompt
 
         if use_mem0:
-            search        = persona_memory.mem0_search(req.text)
+            search_text   = persona_memory.without_name(req.text, persona.wake_words)
+            search        = persona_memory.mem0_search(search_text)
             system_prompt = system_prompt + persona_memory.memories_block(search["hits"])
             show_memory_record("search", pname, search)
 

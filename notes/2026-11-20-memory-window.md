@@ -85,7 +85,9 @@ The owner asked to keep the first two for later (2026-11-20).
   Owner plans to move to a local mem0 server; MEM0_URL in
   persona_schemas.py is the one place the address lives.
 - **Cognee as a second watched memory system** (owner's idea, not asked for).
-- The search runs on the whole input, "Sal," prefix included.
+- ~~The search runs on the whole input, "Sal," prefix included.~~ Fixed
+  2026-11-23: without_name() drops a leading wake word (and its comma)
+  from the search text only; saves still get the exact words.
 
 ## Side issue the same evening
 
