@@ -37,8 +37,9 @@ import time
 import httpx
 
 from persona_schemas import (
-    MEM0_ADD_TIMEOUT, MEM0_EVENT_POLL, MEM0_EVENT_WAIT, MEM0_SEARCH_TIMEOUT,
-    MEM0_TOP_K, MEM0_URL, MEM0_USER_ID, PROMPT_MARK, REPLAY_EXCHANGES,
+    MEM0_ADD_TIMEOUT, MEM0_EVENT_POLL, MEM0_EVENT_WAIT, MEM0_MIN_SCORE,
+    MEM0_SEARCH_TIMEOUT, MEM0_TOP_K, MEM0_URL, MEM0_USER_ID, PROMPT_MARK,
+    REPLAY_EXCHANGES,
 )
 
 
@@ -110,14 +111,20 @@ def mem0_search(text: str) -> dict:
 
     Returns what happened, for the reply and for the Memory window:
 
-        {"query": the text, "hits": [{"memory", "score", "created"}, ...],
-         "seconds": how long mem0 took, "error": "" or what went wrong}
+        {"query": the text,
+         "hits": [{"id", "memory", "score", "created", "used"}, ...],
+         "min_score": the cut-off in force, "seconds": how long mem0 took,
+         "error": "" or what went wrong}
+
+    A hit is "used" (goes into the prompt) when its score is at least
+    MEM0_MIN_SCORE. Weaker hits are kept in the list so the Memory window
+    can show where the line fell. A hit without a score counts as used.
 
     The reply is waiting on this, so any trouble (no key, no answer in
     MEM0_SEARCH_TIMEOUT seconds, an error) means no hits this turn, with
     the reason in "error" and in the log.
     """
-    search = {"query": text, "hits": [], "seconds": 0.0, "error": ""}
+    search = {"query": text, "hits": [], "min_score": MEM0_MIN_SCORE, "seconds": 0.0, "error": ""}
 
     if not mem0_key():
         search["error"] = "skipped: no MEM0_API_KEY in .env"
@@ -138,11 +145,14 @@ def mem0_search(text: str) -> dict:
         answer.raise_for_status()
 
         for result in answer.json()["results"]:
+            score = result.get("score")
+
             hit = {
                 "id":      result.get("id", ""),
                 "memory":  result["memory"],
-                "score":   result.get("score"),
+                "score":   score,
                 "created": result.get("created_at", ""),
+                "used":    score is None or score >= MEM0_MIN_SCORE,
             }
             search["hits"].append(hit)
 
@@ -155,24 +165,39 @@ def mem0_search(text: str) -> dict:
         print("mem0 search failed, no memories this turn: " + search["error"])
         return search
 
-    print(f"mem0 search: {len(search['hits'])} memories in {search['seconds']:.2f}s")
+    used = used_hits(search["hits"])
+    print(f"mem0 search: {len(search['hits'])} memories in {search['seconds']:.2f}s, "
+          f"{len(used)} at or above {MEM0_MIN_SCORE}")
 
     for hit in search["hits"]:
-        print(PROMPT_MARK + str(hit["score"]) + "  " + hit["memory"])
+        mark = "" if hit["used"] else "  (not used)"
+        print(PROMPT_MARK + str(hit["score"]) + "  " + hit["memory"] + mark)
 
     return search
+
+
+def used_hits(hits: list[dict]) -> list[dict]:
+    """The hits strong enough to go into the prompt (see mem0_search)."""
+    used = []
+    for hit in hits:
+        if hit["used"]:
+            used.append(hit)
+
+    return used
 
 
 def memories_block(hits: list[dict]) -> str:
     """
     The text added to the end of the system prompt: "Memories:" and one
-    memory per line. Empty when there are none, so the prompt is unchanged.
+    memory per line, for the hits strong enough to use. Empty when there
+    are none, so the prompt is unchanged.
     """
-    if not hits:
+    used = used_hits(hits)
+    if not used:
         return ""
 
     lines = ["", "", "Memories:"]
-    for hit in hits:
+    for hit in used:
         lines.append("- " + hit["memory"])
 
     return "\n".join(lines)

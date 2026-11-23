@@ -58,8 +58,11 @@ from 2026-11-11 was committed on main first (42c8645).
 
 The owner asked to keep the first two for later (2026-11-20).
 
-- **Score cut-off for search.** Hits at 0.04-0.08 (unrelated memories
-  about volume) still went into the prompt; there is no minimum score.
+- **Score cut-off for search.** BUILT 2026-11-23 on `mem0-score-cutoff`:
+  MEM0_MIN_SCORE = 0.12 in persona_schemas.py (the Kerch test had related
+  hits at 0.16-0.31, unrelated at 0.04-0.08). Weaker hits stay in the
+  Memory window, dimmed and marked "not used"; only used hits reach the
+  prompt. Each search record keeps the cut-off it was made with.
 - **"List everything mem0 holds"** view, as opposed to the per-turn log.
 - **Event polls vs free tier.** Each save makes about 4-5 event lookups.
   Check the mem0 dashboard to see whether those count; if they do, wait

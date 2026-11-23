@@ -113,6 +113,11 @@
     color: var(--text-muted);
   }
 
+  /* A search hit below the score cut-off, kept out of the prompt. */
+  .line.unused {
+    opacity: 0.5;
+  }
+
   .error {
     color: var(--error);
   }
@@ -197,10 +202,19 @@
 
   // ─── One Search ─────────────────────────────────────────────────────────
 
+  // True when a hit went into the prompt. Records made before the score
+  // cut-off existed have no "used", and every hit then went in.
+  function wasUsed(hit) {
+    return hit.used !== false;
+  }
+
+
   // The one-line heading after the persona's name.
   function searchHeading(record) {
     if (record.error) return 'searched: ' + record.error;
-    return 'searched: ' + record.hits.length + ' found in ' + record.seconds + ' s';
+
+    const used = record.hits.filter(wasUsed).length;
+    return 'searched: ' + record.hits.length + ' found, ' + used + ' used, in ' + record.seconds + ' s';
   }
 
 
@@ -220,9 +234,17 @@
       body.appendChild(piece('div', 'line muted', 'nothing'));
     }
 
+    // Hits below the cut-off are shown dimmed: mem0 found them, but they
+    // were kept out of the prompt.
     for (const hit of record.hits) {
       const line = taggedLine(String(hit.score), hit.memory);
       line.appendChild(piece('span', 'muted', '  ' + shortDate(hit.created)));
+
+      if (!wasUsed(hit)) {
+        line.classList.add('unused');
+        line.appendChild(piece('span', 'muted', '  not used, below ' + record.min_score));
+      }
+
       body.appendChild(line);
     }
   }

@@ -156,6 +156,7 @@ LOG_PROMPTS = False
 MEM0_URL            = "https://api.mem0.ai"
 MEM0_USER_ID        = "eirikur"   # whose memories these are; every persona shares them
 MEM0_TOP_K          = 5           # most memories added to one prompt
+MEM0_MIN_SCORE      = 0.12        # weaker matches are shown in the Memory window but kept out of the prompt
 MEM0_SEARCH_TIMEOUT = 3.0         # seconds; the reply waits for this, so keep it short
 MEM0_ADD_TIMEOUT    = 30.0        # seconds; saving runs in the background
 MEM0_EVENT_POLL     = 1.0         # seconds between asking mem0 whether a save is finished

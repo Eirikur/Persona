@@ -102,7 +102,13 @@ def notice_text(record: dict) -> str:
         return start + record["error"]
 
     if record["kind"] == "search":
-        return start + str(len(record["hits"])) + " memories found in " + str(record["seconds"]) + " s"
+        used = 0
+        for hit in record["hits"]:
+            if hit["used"]:
+                used += 1
+
+        return (start + str(len(record["hits"])) + " memories found, " + str(used)
+                + " used, in " + str(record["seconds"]) + " s")
 
     if record["status"] != "SUCCEEDED":
         return start + record["status"].lower()
