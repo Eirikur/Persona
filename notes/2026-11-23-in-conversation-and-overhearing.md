@@ -132,3 +132,18 @@ what the speaking persona saves is found by the others anyway.
 - Major or System breaking into a conversation they aren't part of.
 - Addressed mode (name anywhere in the first sentence) deciding who the
   conversation is with.
+
+## Where it stopped (2026-11-23, evening)
+
+- All steps built and committed on `in-conversation`, pushed to GitHub as
+  that branch. Not merged into main. The branch also carries the four
+  unmerged `mem0-score-cutoff` commits underneath.
+- Echo's provider was found set to "cerebras" in state.json (so it had been
+  a real model with a prompt saying it wasn't). Set back to "echo" at the
+  owner's request: Echo stays a pure echo. The hub's /provider route only
+  changes the active persona (Sal), so this was done by stopping the hub
+  and changing that one field. Backup of the old file in the session
+  scratchpad (not kept).
+- Echo can't use overheard text. For trying overhearing, the owner will
+  pick or make another persona on a real model (Major or House).
+- Not yet tried live with speech and the real chat window.
