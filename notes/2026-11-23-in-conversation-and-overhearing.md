@@ -69,8 +69,8 @@ REPLAY_EXCHANGES), oldest dropped first.
 When a persona next speaks, its prompt gets a block built from its
 overheard list:
 
-    You hear the following but do not respond because it is not
-    addressed to you:
+    Earlier, you overheard these exchanges in the room. They were not
+    addressed to you, so you did not reply to them:
     Owner: "Sal, do you have that shipping data yet?"
     Sal: "Yes, ..."
 
@@ -98,13 +98,18 @@ what the speaking persona saves is found by the others anyway.
 3. List instead of one name, newest bubble only, roster name gold.
    Checked in headless Chromium driven over its debugging port.
 4. Overhearing, with OVERHEARD_EXCHANGES (0 = off), OVERHEARD_OWNER_LABEL
-   ("User") and OVERHEARD_HEADER (the owner's wording) in
+   ("User") and OVERHEARD_HEADER in
    persona_schemas.py; overhear() / overheard_block() in
    persona_memory.py. Tested: told Sal a container number, Echo answered
    it; Sal then knew what Echo said. Backstage shows the block at the end
    of the system prompt. Every reply is overheard by everyone else in the
    room, so in a broadcast a later persona sees the earlier ones' answers
    to the same line.
+5. OVERHEARD_HEADER reworded to the past tense. A persona reads it only
+   when it is addressed itself (that is when its prompt is built), so the
+   first wording's present "do not respond" could be taken as being about
+   the current line. Now: "Earlier, you overheard these exchanges in the
+   room. They were not addressed to you, so you did not reply to them:".
 
 ## Side effects told to the owner
 

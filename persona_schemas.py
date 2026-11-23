@@ -163,9 +163,12 @@ OVERHEARD_EXCHANGES = 10
 # models already know the owner by.
 OVERHEARD_OWNER_LABEL = "User"
 
-# The line that opens the overheard exchanges in the system prompt.
-OVERHEARD_HEADER = ("You hear the following but do not respond because it "
-                    "is not addressed to you:")
+# The line that opens the overheard exchanges in the system prompt. A
+# persona reads it only when it is being addressed itself (that is when its
+# prompt is built), so it speaks of the overhearing in the past: a present
+# "do not respond" could be taken as being about the current line.
+OVERHEARD_HEADER = ("Earlier, you overheard these exchanges in the room. "
+                    "They were not addressed to you, so you did not reply to them:")
 
 # Write the whole prompt (system prompt, replayed turns, new message) to the
 # hub log on every LLM call, so it can be read in the Logs tab. Off since
