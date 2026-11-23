@@ -73,9 +73,17 @@ The owner asked to keep the first two for later (2026-11-20).
   set. On 2026-11-23 the owner held 11 memories, none replaced.
   `updated_at` is mostly when mem0 finished saving; one probe hint that it
   quietly touched an older related memory.
-- **Event polls vs free tier.** Each save makes about 4-5 event lookups.
-  Check the mem0 dashboard to see whether those count; if they do, wait
-  ~2 s before the first poll.
+- **Event polls vs free tier.** Settled 2026-11-23 from mem0's pricing
+  pages: only adds (10,000/month) and retrievals (1,000/month) count;
+  event lookups are not mentioned, so most likely free.
+- **Free-tier trial deadline.** mem0 pays for its extraction LLM only for
+  the first 30 days (accounts made before 2026-10-26: until 2026-11-25).
+  After that, without our own LLM key in the mem0 dashboard, adds return
+  an error (the Memory window will show the save as FAILED); searches keep
+  working up to 1,000/month. No usage page is linked from the docs; the
+  dashboard is https://app.mem0.ai, and mem0 emails at 50/80/100%.
+  Owner plans to move to a local mem0 server; MEM0_URL in
+  persona_schemas.py is the one place the address lives.
 - **Cognee as a second watched memory system** (owner's idea, not asked for).
 - The search runs on the whole input, "Sal," prefix included.
 
