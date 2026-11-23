@@ -308,7 +308,7 @@ finished_began  = 0.0   # when the last recording that ended started
 last_stop       = 0.0   # when a stop word last silenced a persona
 
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
-IN_CONVERSATION_WITH = ""     # named mode: persona the owner is talking with, "" = nobody
+IN_CONVERSATION_WITH = []     # named mode: personas the owner is talking with, [] = nobody
 conversation_timer   = None   # threading.Timer that ends the conversation, or None
 replying             = False  # True while /converse has personas thinking or talking
 MUTED          = False     # True = ignore voice input; typed input still goes through
@@ -959,20 +959,51 @@ def stop_speaking(normalized: str) -> None:
 # or reply, on "go quiet", when the persona leaves the room, or when the
 # room switches to open mode.
 
+def members_text() -> str:
+    """The conversation's members as display names, e.g. "Sal" or "Sal, Echo"."""
+    return ", ".join(display_name(name) for name in IN_CONVERSATION_WITH)
+
+
 def start_conversation(persona_name: str) -> None:
-    """Make this persona the one the owner is talking with, and tell the chat page."""
+    """
+    Make this persona the one the owner is talking with, and tell the chat
+    page. IN_CONVERSATION_WITH is a list so that a conversation can later
+    hold several personas; for now naming a persona replaces whoever was
+    in it.
+
+    A new list is assigned rather than the old one changed, so code that
+    read the list a moment ago keeps a list that doesn't change under it.
+    """
     global IN_CONVERSATION_WITH
 
-    already_talking      = IN_CONVERSATION_WITH == persona_name
-    IN_CONVERSATION_WITH = persona_name
+    already_talking      = IN_CONVERSATION_WITH == [persona_name]
+    IN_CONVERSATION_WITH = [persona_name]
     restart_conversation_clock()
 
     if already_talking:
         return
 
-    print("in conversation with " + display_name(persona_name))
-    emit("conversation", persona_name)
-    emit("log", "in conversation with " + display_name(persona_name))
+    print("in conversation with " + members_text())
+    emit("conversation", "", members=IN_CONVERSATION_WITH)
+    emit("log", "in conversation with " + members_text())
+
+
+def leave_conversation(persona_name: str, reason: str) -> None:
+    """Take one persona out of the conversation; with nobody left, it ends."""
+    global IN_CONVERSATION_WITH
+
+    if persona_name not in IN_CONVERSATION_WITH:
+        return
+
+    remaining = [name for name in IN_CONVERSATION_WITH if name != persona_name]
+    if not remaining:
+        end_conversation(reason)
+        return
+
+    IN_CONVERSATION_WITH = remaining
+    print("conversation: " + reason + ", still with " + members_text())
+    emit("conversation", "", members=IN_CONVERSATION_WITH)
+    emit("log", "conversation: " + reason + ", still with " + members_text())
 
 
 def end_conversation(reason: str) -> None:
@@ -986,12 +1017,12 @@ def end_conversation(reason: str) -> None:
     if not IN_CONVERSATION_WITH:
         return
 
-    name = display_name(IN_CONVERSATION_WITH)
-    IN_CONVERSATION_WITH = ""
+    names = members_text()
+    IN_CONVERSATION_WITH = []
 
-    print("conversation with " + name + " ended: " + reason)
-    emit("conversation", "")
-    emit("log", "conversation with " + name + " ended (" + reason + ")")
+    print("conversation with " + names + " ended: " + reason)
+    emit("conversation", "", members=[])
+    emit("log", "conversation with " + names + " ended (" + reason + ")")
 
 
 def restart_conversation_clock() -> None:
@@ -1235,12 +1266,12 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
             threading.Thread(target=say_summary, args=(notice,), daemon=True).start()
             return [], True
 
-        # No name: the line goes to the persona the owner is talking with.
+        # No name: the line goes to the personas the owner is talking with.
         # Read once: the clock's thread may end the conversation meanwhile.
-        partner = IN_CONVERSATION_WITH
-        if partner and partner in loaded:
+        partners = [name for name in IN_CONVERSATION_WITH if name in loaded]
+        if partners:
             restart_conversation_clock()
-            return [partner], True
+            return partners, True
 
         return [], True
 
@@ -1317,8 +1348,7 @@ def unload_persona(persona_name: str):
         state.loaded_personas.remove(persona_name)
         save_roster(state)
 
-    if persona_name == IN_CONVERSATION_WITH:
-        end_conversation(display_name(persona_name) + " left the room")
+    leave_conversation(persona_name, display_name(persona_name) + " left the room")
 
     emit("roster", "", loaded_personas=state.loaded_personas)
     print(f"persona {persona_name} left the chat")

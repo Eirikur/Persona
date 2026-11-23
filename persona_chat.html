@@ -190,9 +190,9 @@
     border-bottom-left-radius: 3px;
   }
 
-  /* The persona the owner is in conversation with (named mode): its bubbles
-     get a highlight border until the conversation ends. The border, not the
-     outline, because the outline belongs to the file-drop pulses above. */
+  /* A persona the owner is in conversation with (named mode): its newest
+     bubble gets a highlight border until the conversation ends. The border,
+     not the outline, because the outline belongs to the file-drop pulses above. */
   .message.sal.in-conversation .bubble { border-color: var(--accent-sal); }
 
   .message.user .bubble {
@@ -394,6 +394,9 @@
   .roster-name::first-letter { font-size: 1.5em; }
 
   .roster-name.absent { color: var(--text-dim); }
+
+  /* In conversation with the owner (named mode): highlight, like its bubble. */
+  .roster-name.in-conversation { color: var(--accent-sal); }
 
   #roster-menu {
     position: fixed;
@@ -710,17 +713,31 @@
       });
   }
 
-  // The persona the owner is in conversation with, or '' for nobody. The
-  // hub decides; this page only marks that persona's bubbles (see the
-  // .in-conversation style), now and as new ones arrive in addBubble.
-  let conversationWith = '';
+  // The personas the owner is in conversation with ([] = nobody). The hub
+  // decides; this page only marks them with the .in-conversation style:
+  // each one's name in the roster, and its newest bubble.
+  let conversationWith = [];
 
-  function showConversation(personaKey) {
-    conversationWith = personaKey || '';
+  function showConversation(members) {
+    conversationWith = members || [];
+    markConversation();
+  }
 
-    for (const msg of document.querySelectorAll('.message.sal')) {
-      const inIt = conversationWith !== '' && msg.dataset.persona === conversationWith;
-      msg.classList.toggle('in-conversation', inIt);
+  // Put the .in-conversation mark where it belongs right now. Called when
+  // the conversation changes, when a persona's new bubble arrives (the mark
+  // moves to it), and after the roster is redrawn.
+  function markConversation() {
+    for (const el of document.querySelectorAll('.in-conversation')) {
+      el.classList.remove('in-conversation');
+    }
+
+    for (const name of conversationWith) {
+      const nameEl = document.querySelector('.roster-name[data-persona="' + name + '"]');
+      if (nameEl) nameEl.classList.add('in-conversation');
+
+      const bubbles = document.querySelectorAll('.message.sal[data-persona="' + name + '"]');
+      const newest  = bubbles[bubbles.length - 1];
+      if (newest) newest.classList.add('in-conversation');
     }
   }
 
@@ -782,7 +799,6 @@
     const msg = document.createElement('div');
     msg.className = `message ${cls}`;
     if (personaKey) msg.dataset.persona = personaKey;
-    if (personaKey && personaKey === conversationWith) msg.classList.add('in-conversation');
 
     const header = document.createElement('div');
     header.className = 'header';
@@ -1320,6 +1336,7 @@
       .then(s => {
         drawRoster(s.personas || [], s.loaded_personas || []);
         showMuted(s.muted);
+        showConversation(s.in_conversation_with);
 
         // Fonts the hub remembers (dropped earlier, or saved by "system persist").
         for (const [persona, path] of Object.entries(s.fonts || {})) {
@@ -1479,7 +1496,7 @@
       } else if (type === 'roster') {
         loadRoster();
       } else if (type === 'conversation') {
-        showConversation(text);
+        showConversation(data.members);
       } else if (type === 'inference') {
         stateEls.inference.classList.remove('tool');
         setLive('inference');
@@ -1496,6 +1513,7 @@
         addBubble('sal', personaBubbleName(persona), text,
                   {model: model, voice: voice, provider: provider, providerLocal: provider_local},
                   persona);
+        markConversation();
       } else if (type === 'playback_start') {
         stateEls.speaking.classList.remove('rendering');
         stateEls.speaking.classList.add('playing');

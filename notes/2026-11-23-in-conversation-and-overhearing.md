@@ -20,7 +20,10 @@ every line. That saves repeating the name, but it brings in everyone.
 
 ### IN_CONVERSATION_WITH (room level, in the hub)
 
-One value: the persona the owner is talking with, or nobody. It lives on
+A list of the personas the owner is talking with ([] = nobody). For now
+naming a persona replaces whoever was in it, so it holds at most one; the
+list is there so a conversation can later hold several (how a second
+persona joins is the owner's to decide). It lives on
 the room, not on each persona. While only the owner converses, one value
 says it all; a copy on each persona could disagree. A per-persona field
 can come later, when personas talk to each other.
@@ -48,9 +51,10 @@ going.
 
 ### Chat page
 
-While a conversation is in effect, that persona's bubbles get a highlight
-border (--accent-sal, the gold). The owner's bubbles don't change. The
-border goes back to normal when the conversation ends. It uses the
+While a conversation is in effect, the persona's newest bubble gets a
+highlight border (--accent-sal, the gold), moving to each new bubble, and
+its name in the roster turns gold. The owner's bubbles don't change. Both
+go back to normal when the conversation ends. It uses the
 border, not the outline, because the outline is used by the voice-drop
 pulses.
 
@@ -85,12 +89,33 @@ what the speaking persona saves is found by the others anyway.
 
 ## Steps (commit each)
 
-1. This note.
+1. This note. (a886a41)
 2. IN_CONVERSATION_WITH routing, the 30-second drop, and the bubble
-   border.
-3. Overhearing, with OVERHEARD_EXCHANGES.
+   border. (831036d) Tested by typed /converse lines: unnamed lines reach
+   only the partner, naming switches partner, go quiet / open mode /
+   leaving the room / 30 s of quiet each end it. The clock waits while
+   the persona thinks (`replying`) or talks (`speaking`).
+3. List instead of one name, newest bubble only, roster name gold.
+   Checked in headless Chromium driven over its debugging port.
+4. Overhearing, with OVERHEARD_EXCHANGES.
+
+## Side effects told to the owner
+
+- Sal alone in named mode no longer listens until "go quiet"; unnamed
+  lines stop reaching her 30 s after she speaks. persona_sal.sh uses open
+  mode, so it is unaffected.
+- The first-word false alarm costs more now: with House out of the room,
+  "House prices are up" to Sal gets System's miss notice and Sal never
+  gets the line. Addressed mode is the later fix.
 
 ## Later, not designed
+
+- Personas-only conversations: the owner decided not to go there for now
+  (2026-11-23). A reply handed on to another persona is a feedback loop
+  and would need a stopping rule (turn cap, time cap).
+- How a second persona joins a conversation (add or replace).
+- One clock and one `replying` flag serve the whole room; two
+  conversations at once would each need their own.
 
 - Major or System breaking into a conversation they aren't part of.
 - Addressed mode (name anywhere in the first sentence) deciding who the
