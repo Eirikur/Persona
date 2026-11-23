@@ -190,6 +190,11 @@
     border-bottom-left-radius: 3px;
   }
 
+  /* The persona the owner is in conversation with (named mode): its bubbles
+     get a highlight border until the conversation ends. The border, not the
+     outline, because the outline belongs to the file-drop pulses above. */
+  .message.sal.in-conversation .bubble { border-color: var(--accent-sal); }
+
   .message.user .bubble {
     background: #253540;
     border: 1px solid #304454;
@@ -699,7 +704,24 @@
   function syncMuted() {
     fetch('/state')
       .then(r => r.json())
-      .then(s => showMuted(s.muted));
+      .then(s => {
+        showMuted(s.muted);
+        showConversation(s.in_conversation_with);
+      });
+  }
+
+  // The persona the owner is in conversation with, or '' for nobody. The
+  // hub decides; this page only marks that persona's bubbles (see the
+  // .in-conversation style), now and as new ones arrive in addBubble.
+  let conversationWith = '';
+
+  function showConversation(personaKey) {
+    conversationWith = personaKey || '';
+
+    for (const msg of document.querySelectorAll('.message.sal')) {
+      const inIt = conversationWith !== '' && msg.dataset.persona === conversationWith;
+      msg.classList.toggle('in-conversation', inIt);
+    }
   }
 
   hearingEl.addEventListener('click', () => {
@@ -760,6 +782,7 @@
     const msg = document.createElement('div');
     msg.className = `message ${cls}`;
     if (personaKey) msg.dataset.persona = personaKey;
+    if (personaKey && personaKey === conversationWith) msg.classList.add('in-conversation');
 
     const header = document.createElement('div');
     header.className = 'header';
@@ -1455,6 +1478,8 @@
         }
       } else if (type === 'roster') {
         loadRoster();
+      } else if (type === 'conversation') {
+        showConversation(text);
       } else if (type === 'inference') {
         stateEls.inference.classList.remove('tool');
         setLive('inference');

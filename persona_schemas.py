@@ -135,6 +135,15 @@ RESEARCH_DEEP_PHRASES = (
 )
 
 
+# ─── Room ─────────────────────────────────────────────────────────────────────
+
+# In named mode, naming a persona starts a conversation with it: lines
+# without a name go to that persona only, and the others stay quiet. The
+# conversation ends this many seconds after the persona finishes speaking,
+# unless the owner says something first. "go quiet" ends it at once.
+CONVERSATION_TIMEOUT = 30.0
+
+
 # ─── Memory ───────────────────────────────────────────────────────────────────
 
 # Replay: each persona gets its last few exchanges with the owner sent along

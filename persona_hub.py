@@ -36,7 +36,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from persona_schemas import (
-    DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES, PROVIDER_NAMES, QUIET_REQUESTS,
+    CONVERSATION_TIMEOUT, DEFAULT_MODELS, LOG_PROMPTS, PRESET_VOICES,
+    PROVIDER_NAMES, QUIET_REQUESTS,
     REPLY_WAIT, REPLY_WAIT_DEEP, RESEARCH_DEEP_PHRASES, RESEARCH_PRESETS,
     SPEECH_EVENT_TYPES, Persona, VoiceProfile, clean_setup_name, load, save,
     save_roster, save_setup,
@@ -307,6 +308,9 @@ finished_began  = 0.0   # when the last recording that ended started
 last_stop       = 0.0   # when a stop word last silenced a persona
 
 MODE           = "named"   # "named" = wake-word required, "open" = always listening
+IN_CONVERSATION_WITH = ""     # named mode: persona the owner is talking with, "" = nobody
+conversation_timer   = None   # threading.Timer that ends the conversation, or None
+replying             = False  # True while /converse has personas thinking or talking
 MUTED          = False     # True = ignore voice input; typed input still goes through
 MEM0_ON        = False     # True = mem0 picks memories for each prompt (Settings tab box)
 RESEARCH_DEPTH = "auto"    # research depth from the Settings tab; "auto" = the persona chooses
@@ -944,6 +948,79 @@ def stop_speaking(normalized: str) -> None:
     if "be quiet" in " ".join(plain_words(normalized)):
         MODE = "named"
         print("mode → named")
+        end_conversation("told to be quiet")
+
+
+# ─── Conversation ─────────────────────────────────────────────────────────────
+
+# In named mode, naming a persona starts a conversation with it. Until it
+# ends, lines without a name go to that persona alone; the others in the
+# room stay quiet. It ends CONVERSATION_TIMEOUT seconds after the last line
+# or reply, on "go quiet", when the persona leaves the room, or when the
+# room switches to open mode.
+
+def start_conversation(persona_name: str) -> None:
+    """Make this persona the one the owner is talking with, and tell the chat page."""
+    global IN_CONVERSATION_WITH
+
+    already_talking      = IN_CONVERSATION_WITH == persona_name
+    IN_CONVERSATION_WITH = persona_name
+    restart_conversation_clock()
+
+    if already_talking:
+        return
+
+    print("in conversation with " + display_name(persona_name))
+    emit("conversation", persona_name)
+    emit("log", "in conversation with " + display_name(persona_name))
+
+
+def end_conversation(reason: str) -> None:
+    """End the conversation, if there is one, and tell the chat page why."""
+    global IN_CONVERSATION_WITH, conversation_timer
+
+    if conversation_timer:
+        conversation_timer.cancel()
+        conversation_timer = None
+
+    if not IN_CONVERSATION_WITH:
+        return
+
+    name = display_name(IN_CONVERSATION_WITH)
+    IN_CONVERSATION_WITH = ""
+
+    print("conversation with " + name + " ended: " + reason)
+    emit("conversation", "")
+    emit("log", "conversation with " + name + " ended (" + reason + ")")
+
+
+def restart_conversation_clock() -> None:
+    """Give the conversation another CONVERSATION_TIMEOUT seconds from now."""
+    global conversation_timer
+
+    if conversation_timer:
+        conversation_timer.cancel()
+        conversation_timer = None
+
+    if not IN_CONVERSATION_WITH:
+        return
+
+    conversation_timer = threading.Timer(CONVERSATION_TIMEOUT, conversation_clock_ran_out)
+    conversation_timer.daemon = True
+    conversation_timer.start()
+
+
+def conversation_clock_ran_out() -> None:
+    """
+    Called when the conversation's time is up. A persona still thinking
+    (research can take minutes) or talking (a long spoken reply) gets
+    another round; otherwise the conversation ends.
+    """
+    if replying or speaking:
+        restart_conversation_clock()
+        return
+
+    end_conversation("quiet for " + str(int(CONVERSATION_TIMEOUT)) + " seconds")
 
 
 # ─── Dispatch Logic ───────────────────────────────────────────────────────────
@@ -986,8 +1063,9 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
 
     Typed input always reaches full dispatch; in named mode it still must
     start with a loaded persona's wake word (e.g. typing "salice ..."
-    addresses just Sal), so that with several personas loaded, typing a
-    plain sentence doesn't page all of them at once.
+    addresses just Sal) unless a conversation is in effect, so that with
+    several personas loaded, typing a plain sentence doesn't page all of
+    them at once.
 
     Routing order:
       1. Apply MISHEARINGS corrections
@@ -1001,9 +1079,10 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
       5. COMMANDS match    → run shell command, return ([], True)
       6. Quiet phrases     → switch to named mode, return ([], True)
       7. BROADCAST_PHRASES → all loaded personas
-      8. Named mode → persona whose wake word matches (and switches the
-         room to open mode for what follows), or []. If the first word
-         names a persona who is out of the room, System says so.
+      8. Named mode → persona whose wake word matches (and starts a
+         conversation with it, see start_conversation). If the first word
+         names a persona who is out of the room, System says so. A line
+         with no name goes to the persona in conversation, if any, else [].
       9. Open mode  → all loaded personas
     """
     global MODE
@@ -1124,6 +1203,7 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
     if "go quiet" in normalized or "be quiet" in normalized or "quiet mode" in normalized:
         MODE = "named"
         print("mode → named")
+        end_conversation("told to go quiet")
         return [], True
 
     loaded = state.loaded_personas
@@ -1139,11 +1219,9 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
                 continue
             for ww in persona.wake_words:
                 if normalized.startswith(ww):
-                    # Being named switches the room to open mode, so the
-                    # rest of the exchange doesn't need a name on every
-                    # line. Say "go quiet" to require one again.
-                    MODE = "open"
-                    print(f"mode → open (named {pname})")
+                    # Being named starts a conversation, so the rest of
+                    # the exchange doesn't need a name on every line.
+                    start_conversation(pname)
                     return [pname], True
 
         # Nobody here answers to that name. If it names someone who is
@@ -1155,6 +1233,15 @@ def dispatch(text: str, typed: bool = False, replayed: bool = False) -> tuple[li
             print("named miss: " + missing)
             emit("log", notice)
             threading.Thread(target=say_summary, args=(notice,), daemon=True).start()
+            return [], True
+
+        # No name: the line goes to the persona the owner is talking with.
+        # Read once: the clock's thread may end the conversation meanwhile.
+        partner = IN_CONVERSATION_WITH
+        if partner and partner in loaded:
+            restart_conversation_clock()
+            return [partner], True
+
         return [], True
 
     return list(loaded), True
@@ -1191,16 +1278,17 @@ def get_state():
     """Report current mode, the loaded roster, and the active persona's provider/model."""
     persona = state.personas[state.active_persona]
     return {
-        "mode":             MODE,
-        "muted":            MUTED,
-        "mem0":             MEM0_ON,
-        "research_depth":   RESEARCH_DEPTH,
-        "persona":          state.active_persona,
-        "provider":         persona.provider,
-        "model":            persona.model,
-        "loaded_personas":  state.loaded_personas,
-        "personas":         list(state.personas),
-        "fonts":            {name: p.font for name, p in state.personas.items() if p.font},
+        "mode":                 MODE,
+        "in_conversation_with": IN_CONVERSATION_WITH,
+        "muted":                MUTED,
+        "mem0":                 MEM0_ON,
+        "research_depth":       RESEARCH_DEPTH,
+        "persona":              state.active_persona,
+        "provider":             persona.provider,
+        "model":                persona.model,
+        "loaded_personas":      state.loaded_personas,
+        "personas":             list(state.personas),
+        "fonts":                {name: p.font for name, p in state.personas.items() if p.font},
     }
 
 
@@ -1228,6 +1316,9 @@ def unload_persona(persona_name: str):
     if persona_name in state.loaded_personas:
         state.loaded_personas.remove(persona_name)
         save_roster(state)
+
+    if persona_name == IN_CONVERSATION_WITH:
+        end_conversation(display_name(persona_name) + " left the room")
 
     emit("roster", "", loaded_personas=state.loaded_personas)
     print(f"persona {persona_name} left the chat")
@@ -1366,6 +1457,11 @@ def set_mode(mode: str):
         return {"error": f"unknown mode {mode!r}"}
     MODE = mode
     print(f"mode → {mode}")
+
+    # In open mode everyone answers, so a conversation means nothing there.
+    if mode == "open":
+        end_conversation("room switched to open mode")
+
     return {"mode": MODE}
 
 
@@ -1731,6 +1827,8 @@ def converse(req: ThinkRequest):
     Main input endpoint. Accepts merged speech+keyboard text, dispatches to
     personas, runs LLM inference, and speaks each response in turn.
     """
+    global replying
+
     if MUTED and not req.typed:
         return {"text": ""}
 
@@ -1751,45 +1849,54 @@ def converse(req: ThinkRequest):
 
     responses = []
 
-    for pname in to_respond:
-        persona = state.personas[pname]
+    # While the personas think and talk, the conversation's clock waits
+    # (see conversation_clock_ran_out). It starts again once they are done,
+    # even if a reply failed.
+    replying = True
 
-        emit("inference", "")
+    try:
+        for pname in to_respond:
+            persona = state.personas[pname]
 
-        # The persona hears its earlier exchanges again, then the new input.
-        messages = persona_memory.messages_for(pname, req.text)
-        print(f"[{pname}] replaying {len(messages) - 1} earlier messages")
+            emit("inference", "")
 
-        # With mem0 on, the memories closest to the input join the system
-        # prompt. Echo never calls a model, so it has no use for them.
-        use_mem0      = MEM0_ON and persona.provider != "echo"
-        system_prompt = persona.system_prompt
+            # The persona hears its earlier exchanges again, then the new input.
+            messages = persona_memory.messages_for(pname, req.text)
+            print(f"[{pname}] replaying {len(messages) - 1} earlier messages")
 
-        if use_mem0:
-            search_text   = persona_memory.without_name(req.text, persona.wake_words)
-            search        = persona_memory.mem0_search(search_text)
-            system_prompt = system_prompt + persona_memory.memories_block(search["hits"])
-            show_memory_record("search", pname, search)
+            # With mem0 on, the memories closest to the input join the system
+            # prompt. Echo never calls a model, so it has no use for them.
+            use_mem0      = MEM0_ON and persona.provider != "echo"
+            system_prompt = persona.system_prompt
 
-        depth = research_depth_for(req.text)
-        if depth != "auto":
-            print(f"[{pname}] research depth for this reply: {depth}")
+            if use_mem0:
+                search_text   = persona_memory.without_name(req.text, persona.wake_words)
+                search        = persona_memory.mem0_search(search_text)
+                system_prompt = system_prompt + persona_memory.memories_block(search["hits"])
+                show_memory_record("search", pname, search)
 
-        # Time LLM inference
-        llm_start = time.time()
-        response = llm(persona, system_prompt, messages, depth)
-        llm_duration = time.time() - llm_start
+            depth = research_depth_for(req.text)
+            if depth != "auto":
+                print(f"[{pname}] research depth for this reply: {depth}")
 
-        persona_memory.remember_exchange(pname, req.text, response)
+            # Time LLM inference
+            llm_start = time.time()
+            response = llm(persona, system_prompt, messages, depth)
+            llm_duration = time.time() - llm_start
 
-        if use_mem0 and response.strip():
-            threading.Thread(target=save_to_mem0,
-                             args=(pname, req.text, response), daemon=True).start()
+            persona_memory.remember_exchange(pname, req.text, response)
 
-        if response:
-            print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")
-            say(pname, response)
-        responses.append(response)
+            if use_mem0 and response.strip():
+                threading.Thread(target=save_to_mem0,
+                                 args=(pname, req.text, response), daemon=True).start()
+
+            if response:
+                print(f"[{pname}] > {response} (LLM: {llm_duration:.2f}s)")
+                say(pname, response)
+            responses.append(response)
+    finally:
+        replying = False
+        restart_conversation_clock()
 
     total_duration = time.time() - start_time
     print(f"Total converse cycle: {total_duration:.2f}s")
