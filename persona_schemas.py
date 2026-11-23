@@ -161,6 +161,8 @@ MEM0_SEARCH_TIMEOUT = 3.0         # seconds; the reply waits for this, so keep i
 MEM0_ADD_TIMEOUT    = 30.0        # seconds; saving runs in the background
 MEM0_EVENT_POLL     = 1.0         # seconds between asking mem0 whether a save is finished
 MEM0_EVENT_WAIT     = 40.0        # seconds; stop following a save after this long
+MEM0_LIST_PAGE_SIZE = 100         # memories per page when listing everything mem0 holds
+MEM0_LIST_MAX_PAGES = 20          # stop listing after this many pages
 
 
 # ─── Reply Text Filter ────────────────────────────────────────────────────────

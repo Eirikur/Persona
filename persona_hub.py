@@ -1318,6 +1318,17 @@ def memory_recent():
     return persona_memory_window.recent_records()
 
 
+# Must come before /memory/{record_id}, or "all" would be taken for a record id.
+@app.get("/memory/all")
+def memory_all():
+    """
+    Everything mem0 holds for the owner, for the Memory window's "All
+    memories" view. Read-only, and works with mem0 switched off; each
+    call asks mem0 afresh.
+    """
+    return persona_memory.mem0_list_all()
+
+
 @app.get("/memory/{record_id}")
 def memory_record(record_id: int):
     """One kept mem0 search or save, by id; 404 if it has been forgotten."""

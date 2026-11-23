@@ -37,9 +37,9 @@ import time
 import httpx
 
 from persona_schemas import (
-    MEM0_ADD_TIMEOUT, MEM0_EVENT_POLL, MEM0_EVENT_WAIT, MEM0_MIN_SCORE,
-    MEM0_SEARCH_TIMEOUT, MEM0_TOP_K, MEM0_URL, MEM0_USER_ID, PROMPT_MARK,
-    REPLAY_EXCHANGES,
+    MEM0_ADD_TIMEOUT, MEM0_EVENT_POLL, MEM0_EVENT_WAIT, MEM0_LIST_MAX_PAGES,
+    MEM0_LIST_PAGE_SIZE, MEM0_MIN_SCORE, MEM0_SEARCH_TIMEOUT, MEM0_TOP_K,
+    MEM0_URL, MEM0_USER_ID, PROMPT_MARK, REPLAY_EXCHANGES,
 )
 
 
@@ -303,6 +303,68 @@ def mem0_follow(event_id: str) -> dict:
         print(PROMPT_MARK + decision["event"] + "  " + decision["memory"])
 
     return outcome
+
+
+def mem0_list_all() -> dict:
+    """
+    Every memory mem0 holds for MEM0_USER_ID, for the Memory window's "All
+    memories" view. Read-only. mem0 sends them a page at a time; each page
+    names the next one, up to MEM0_LIST_MAX_PAGES pages.
+
+    Returns:
+
+        {"memories": [{"id", "memory", "categories", "created", "updated",
+                       "replaced_by", "synthesized"}, ...],
+         "count": how many mem0 says it holds,
+         "seconds": how long the listing took, "error": "" or what went wrong}
+
+    Times are passed on exactly as mem0 sends them, with their UTC offset,
+    for the page to show in local time.
+    """
+    listing = {"memories": [], "count": 0, "seconds": 0.0, "error": ""}
+
+    if not mem0_key():
+        listing["error"] = "no MEM0_API_KEY in .env"
+        return listing
+
+    request = {"filters": {"user_id": MEM0_USER_ID}}
+    url     = MEM0_URL + "/v3/memories/?page_size=" + str(MEM0_LIST_PAGE_SIZE)
+    pages   = 0
+    started = time.time()
+
+    try:
+        while url and pages < MEM0_LIST_MAX_PAGES:
+            answer = httpx.post(url, json=request, headers=mem0_headers(), timeout=MEM0_ADD_TIMEOUT)
+            answer.raise_for_status()
+            page = answer.json()
+
+            for result in page["results"]:
+                memory = {
+                    "id":          result.get("id", ""),
+                    "memory":      result.get("memory", ""),
+                    "categories":  result.get("categories") or [],
+                    "created":     result.get("created_at", ""),
+                    "updated":     result.get("updated_at", ""),
+                    "replaced_by": result.get("replaced_by") or "",
+                    "synthesized": bool(result.get("synthesized")),
+                }
+                listing["memories"].append(memory)
+
+            listing["count"] = page.get("count", len(listing["memories"]))
+            url   = page.get("next")
+            pages = pages + 1
+
+    except Exception as problem:
+        listing["error"] = type(problem).__name__ + " " + str(problem)
+
+    if url and not listing["error"]:
+        listing["error"] = "stopped after " + str(MEM0_LIST_MAX_PAGES) + " pages; some memories not shown"
+
+    listing["seconds"] = round(time.time() - started, 2)
+    print(f"mem0 list: {len(listing['memories'])} of {listing['count']} memories "
+          f"in {listing['seconds']:.2f}s {listing['error']}")
+
+    return listing
 
 
 # ─── Showing the Prompt ───────────────────────────────────────────────────────

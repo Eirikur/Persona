@@ -58,6 +58,61 @@
     letter-spacing: normal;
   }
 
+  /* "Activity" and "All memories": which view the window shows. */
+  .view-button {
+    margin-left: 16px;
+    padding: 0 0 2px 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+  }
+
+  .view-button.chosen {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+
+  /* ─── All Memories View ─────────────────────────────────────────────────── */
+
+  #all {
+    padding: 16px 20px;
+  }
+
+  #all-summary {
+    margin-bottom: 12px;
+    color: var(--text-info);
+  }
+
+  #all-refresh {
+    margin-left: 12px;
+    padding: 2px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-info);
+    font-family: var(--font-ui);
+    cursor: pointer;
+  }
+
+  .memory {
+    margin-bottom: 8px;
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .memory .about {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
   #records {
     padding: 16px 20px;
   }
@@ -139,10 +194,20 @@
 </head>
 <body>
 
-<header>PERSONA MEMORY<span id="mem0-state"></span></header>
+<header>
+  PERSONA MEMORY
+  <button class="view-button chosen" id="show-activity">ACTIVITY</button>
+  <button class="view-button" id="show-all">ALL MEMORIES</button>
+  <span id="mem0-state"></span>
+</header>
 
 <div id="records">
   <p id="empty">No memory activity yet. Each mem0 search (before a reply) and save (after one) appears here.</p>
+</div>
+
+<div id="all" hidden>
+  <div id="all-summary"><span id="all-count">Loading...</span><button id="all-refresh">Refresh</button></div>
+  <div id="all-list"></div>
 </div>
 
 <script>
@@ -152,6 +217,9 @@
   // what mem0 decided to keep: the hub sends a second "memory" notice for
   // the same record, and the page replaces it. The hub keeps the last 50
   // records (see persona_memory_window.py).
+  //
+  // The "All memories" button switches to a second view: everything mem0
+  // holds, fetched from mem0 when opened. Read-only.
   //
   // Records hold what was said and what mem0 wrote, so text is only ever
   // set with textContent, never as HTML.
@@ -342,6 +410,96 @@
       recordsEl.insertBefore(element, recordsEl.firstChild);
     }
   }
+
+
+  // ─── All Memories View ──────────────────────────────────────────────────
+
+  const allView        = document.getElementById('all');
+  const allCountEl     = document.getElementById('all-count');
+  const allListEl      = document.getElementById('all-list');
+  const activityButton = document.getElementById('show-activity');
+  const allButton      = document.getElementById('show-all');
+
+
+  // mem0's time (with its UTC offset) as local date and time to the second,
+  // e.g. "2026-11-20 23:40:55".
+  function fullDate(when) {
+    if (!when) return '';
+
+    const date = new Date(when);
+    return date.getFullYear() + '-' + twoDigits(date.getMonth() + 1) + '-' + twoDigits(date.getDate())
+         + ' ' + twoDigits(date.getHours()) + ':' + twoDigits(date.getMinutes())
+         + ':' + twoDigits(date.getSeconds());
+  }
+
+
+  // Build the element for one stored memory: its wording, then a small
+  // line saying what mem0 knows about it.
+  function memoryElement(memory) {
+    const element = piece('div', 'memory', '');
+    element.appendChild(piece('div', 'line', memory.memory));
+
+    const about = [];
+
+    if (memory.categories.length) {
+      about.push(memory.categories.join(', '));
+    }
+
+    about.push('kept ' + fullDate(memory.created));
+
+    if (memory.updated && memory.updated !== memory.created) {
+      about.push('updated ' + fullDate(memory.updated));
+    }
+
+    if (memory.replaced_by) about.push('replaced by ' + memory.replaced_by.slice(0, 8));
+    if (memory.synthesized) about.push('synthesized by mem0');
+
+    element.appendChild(piece('div', 'about', about.join('  ·  ')));
+    return element;
+  }
+
+
+  // Ask the hub for everything mem0 holds and show it, newest first. Each
+  // load is a call to mem0, so this runs only when the view is opened or
+  // Refresh is clicked.
+  async function loadAllMemories() {
+    allCountEl.textContent = 'Loading...';
+    allListEl.replaceChildren();
+
+    const response = await fetch('/memory/all');
+    const listing  = await response.json();
+
+    let summary = listing.memories.length + ' memories held by mem0';
+    if (listing.error) summary = summary + '  (' + listing.error + ')';
+    allCountEl.textContent = summary;
+
+    const newestFirst = listing.memories.slice().sort(
+      (a, b) => new Date(b.created) - new Date(a.created));
+
+    for (const memory of newestFirst) {
+      allListEl.appendChild(memoryElement(memory));
+    }
+  }
+
+
+  // Show one view and hide the other: "activity" (searches and saves) or
+  // "all" (everything mem0 holds, loaded fresh each time it is opened).
+  function showView(name) {
+    const showAll = name === 'all';
+
+    recordsEl.hidden = showAll;
+    allView.hidden   = !showAll;
+
+    activityButton.classList.toggle('chosen', !showAll);
+    allButton.classList.toggle('chosen', showAll);
+
+    if (showAll) loadAllMemories();
+  }
+
+
+  activityButton.onclick = () => showView('activity');
+  allButton.onclick      = () => showView('all');
+  document.getElementById('all-refresh').onclick = loadAllMemories;
 
 
   // ─── Talking to the Hub ─────────────────────────────────────────────────

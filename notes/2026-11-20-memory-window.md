@@ -63,7 +63,16 @@ The owner asked to keep the first two for later (2026-11-20).
   hits at 0.16-0.31, unrelated at 0.04-0.08). Weaker hits stay in the
   Memory window, dimmed and marked "not used"; only used hits reach the
   prompt. Each search record keeps the cut-off it was made with.
-- **"List everything mem0 holds"** view, as opposed to the per-turn log.
+- **"List everything mem0 holds"** view. BUILT 2026-11-23 on
+  `mem0-score-cutoff`: "ALL MEMORIES" button in the Memory window's
+  header, GET /memory/all -> mem0_list_all() (POST /v3/memories/ with
+  `?page_size=` in the URL; page_size in the body is ignored; follow
+  `next` with the same body; capped at MEM0_LIST_MAX_PAGES). Read-only,
+  works with mem0 off, loads only when opened or on Refresh. Shows text,
+  categories, kept/updated times (local), replaced_by and synthesized when
+  set. On 2026-11-23 the owner held 11 memories, none replaced.
+  `updated_at` is mostly when mem0 finished saving; one probe hint that it
+  quietly touched an older related memory.
 - **Event polls vs free tier.** Each save makes about 4-5 event lookups.
   Check the mem0 dashboard to see whether those count; if they do, wait
   ~2 s before the first poll.
