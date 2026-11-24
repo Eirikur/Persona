@@ -141,7 +141,8 @@ RESEARCH_DEEP_PHRASES = (
 # without a name go to that persona only, and the others stay quiet. The
 # conversation ends this many seconds after the persona finishes speaking,
 # unless the owner says something first. "go quiet" ends it at once.
-CONVERSATION_TIMEOUT = 30.0
+# 3 minutes: long enough to think over a research answer before replying.
+CONVERSATION_TIMEOUT = 180.0
 
 
 # ─── Memory ───────────────────────────────────────────────────────────────────
