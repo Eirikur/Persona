@@ -19,6 +19,7 @@
 #    "openwakeword",
 #    "pvporcupine",
 #    "RealtimeSTT>=1.1.2",
+#    "silero-vad",
 #    "halo",
 #    "nvidia-cublas-cu12",
 #    "nvidia-cudnn-cu12",
