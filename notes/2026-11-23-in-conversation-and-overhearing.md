@@ -165,3 +165,21 @@ what the speaking persona saves is found by the others anyway.
   the gold. The 3-minute drop itself was not sat through.
 - Still open: a second persona on a real model to try overhearing live,
   then merging in-conversation into main (write the plan in notes/ first).
+- Overhearing now logs each listener as it happens ("Major overheard Sal
+  (1 kept)") to hub.log and the Trace tab (2a7fdf2). Compiled and the hub
+  restarted cleanly; the owner had not yet seen the line in Trace when
+  the merge was approved.
+
+## Merge plan (approved by the owner 2026-11-24)
+
+main = origin/main = 27baa9b, and main is an ancestor of in-conversation,
+so this is a fast-forward: no merge commit, no conflicts possible.
+
+1. Commit this note on in-conversation.
+2. git checkout main; git merge --ff-only in-conversation.
+3. git push origin main; check main and origin/main are the same commit.
+4. Push in-conversation too, so the branch on GitHub matches.
+5. The running hub is unaffected: the files are the same on both branches.
+
+This also brings the four mem0-score-cutoff commits (98bf26d..799173c)
+into main.
