@@ -1923,8 +1923,16 @@ def converse(req: ThinkRequest):
             persona_memory.remember_exchange(pname, req.text, response)
 
             # Everyone else in the room overhears the exchange.
+            # Each one gets a line in hub.log and the Trace tab.
             listeners = [name for name in state.loaded_personas if name != pname]
-            persona_memory.overhear(listeners, req.text, display_name(pname), response)
+            heard_by  = persona_memory.overhear(listeners, req.text, display_name(pname), response)
+
+            for listener in heard_by:
+                kept = persona_memory.overheard_kept(listener)
+                line = (display_name(listener) + " overheard " + display_name(pname)
+                        + " (" + str(kept) + " kept)")
+                print(line)
+                emit("log", line)
 
             if use_mem0 and response.strip():
                 threading.Thread(target=save_to_mem0,

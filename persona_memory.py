@@ -111,15 +111,16 @@ overheard      = {}
 overheard_lock = threading.Lock()
 
 
-def overhear(listeners: list[str], text: str, speaker: str, reply: str) -> None:
+def overhear(listeners: list[str], text: str, speaker: str, reply: str) -> list[str]:
     """
     Let each listener overhear one exchange: the owner's text and the
     reply another persona (speaker, a display name) gave it. Each keeps
     only its last OVERHEARD_EXCHANGES. An empty reply is not kept, and
     nothing is kept when OVERHEARD_EXCHANGES is 0 (overhearing off).
+    Returns the listeners that kept it (none in those two cases).
     """
     if not reply.strip() or OVERHEARD_EXCHANGES == 0:
-        return
+        return []
 
     exchange = {"text": text, "speaker": speaker, "reply": reply}
 
@@ -128,6 +129,8 @@ def overhear(listeners: list[str], text: str, speaker: str, reply: str) -> None:
             exchanges = overheard.setdefault(listener, [])
             exchanges.append(exchange)
             del exchanges[:-OVERHEARD_EXCHANGES]
+
+    return listeners
 
 
 def overheard_block(persona_name: str) -> str:
