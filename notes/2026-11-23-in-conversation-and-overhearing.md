@@ -147,3 +147,21 @@ what the speaking persona saves is found by the others anyway.
 - Echo can't use overheard text. For trying overhearing, the owner will
   pick or make another persona on a real model (Major or House).
 - Not yet tried live with speech and the real chat window.
+
+## 2026-11-24
+
+- Voice input had been dead since 2026-11-20: clearing ~/.cache emptied the
+  torch hub cache, the rebuilt speech-in environment (RealtimeSTT 1.2.0)
+  could not find Silero VAD, and torch.hub's "trust this repo?" prompt hit
+  EOF under systemd. The recorder thread died while the service stayed
+  "active". Fixed by adding "silero-vad" to the script's dependencies
+  (705a684).
+- CONVERSATION_TIMEOUT raised from 30 seconds to 3 minutes (360ae21): the
+  owner can easily think over a research answer for more than 30 seconds.
+  Read "30 seconds" above as CONVERSATION_TIMEOUT.
+- Live try by voice in the real window passed: naming Sal starts the
+  conversation (gold bubble and roster name), unnamed follow-ups reach her,
+  the conversation holds past 30 seconds, and "go quiet" ends it and clears
+  the gold. The 3-minute drop itself was not sat through.
+- Still open: a second persona on a real model to try overhearing live,
+  then merging in-conversation into main (write the plan in notes/ first).
